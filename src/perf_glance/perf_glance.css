@@ -1,0 +1,24 @@
+/* perf-glance TUI styles */
+
+Vertical {
+    height: 100%;
+}
+
+#cpu {
+    min-height: 18;
+    height: auto;
+}
+
+#memory {
+    min-height: 5;
+    height: auto;
+}
+
+#process-container {
+    min-height: 8;
+    height: 1fr;
+}
+
+#processes {
+    scrollbar-size: 1 1;
+}
