@@ -12,7 +12,7 @@ DEFAULT_CONFIG_TOML = '''# perf-glance configuration
 # Config file: ~/.config/perf-glance/config.toml
 
 [display]
-refresh_interval = 2          # seconds
+refresh_interval = 3          # seconds
 color = "auto"                # "auto" | "always" | "never"
 cpu_layout = "auto"           # "auto" | "1col" | "2col"
 show_swap = true
@@ -21,7 +21,7 @@ show_cpu_temp = true
 
 [grouping]
 force_name_group = ["cc1", "g++", "gcc", "rustc", "clang", "clang++", "as", "ld", "lean", "lake"]
-generic_parents = ["systemd", "init", "kthreadd", "bash", "sh", "zsh", "fish", "sudo", "su", "login", "sshd", "tmux", "screen"]
+generic_parents = ["systemd", "init", "kthreadd", "bash", "dash", "sh", "zsh", "fish", "sudo", "su", "login", "sshd", "tmux", "screen", "env", "start-stop-daemon"]
 
 [theme]
 cpu_low    = "#00e676"
@@ -104,7 +104,7 @@ def _get_list(d: dict[str, Any], *keys: str) -> list[str]:
 class DisplayConfig:
     """Display-related configuration."""
 
-    refresh_interval: int = 2
+    refresh_interval: int = 3
     color: str = "auto"
     cpu_layout: str = "auto"
     show_swap: bool = True
@@ -153,8 +153,8 @@ def _default_grouping() -> GroupingConfig:
             "cc1", "g++", "gcc", "rustc", "clang", "clang++", "as", "ld", "lean", "lake"
         ],
         generic_parents=[
-            "systemd", "init", "kthreadd", "bash", "sh", "zsh", "fish",
-            "sudo", "su", "login", "sshd", "tmux", "screen",
+            "systemd", "init", "kthreadd", "bash", "dash", "sh", "zsh", "fish",
+            "sudo", "su", "login", "sshd", "tmux", "screen", "env", "start-stop-daemon",
         ],
     )
 
@@ -170,7 +170,7 @@ def load_config(path: Path | None = None) -> Config:
         raw = tomllib.load(f)
 
     display = DisplayConfig(
-        refresh_interval=_get_int(raw, "display", "refresh_interval", default=2),
+        refresh_interval=_get_int(raw, "display", "refresh_interval", default=3),
         color=_get_str(raw, "display", "color", default="auto"),
         cpu_layout=_get_str(raw, "display", "cpu_layout", default="auto"),
         show_swap=_get_bool(raw, "display", "show_swap", default=True),

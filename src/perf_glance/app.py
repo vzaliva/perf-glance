@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import pwd
+import os
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
@@ -22,20 +23,11 @@ from perf_glance.grouping import group_processes
 from perf_glance.widgets import CPUSection, MemorySection, ProcessSection
 
 
-@dataclass
-class SystemSnapshot:
-    """Collected system metrics for one refresh."""
-
-    cpu: CPUSnapshot
-    memory: object
-    temp: float | None
-    process_groups: list
-
-
 class PerfGlanceApp(App):
     """Main TUI application."""
 
     CSS_PATH = "perf_glance.css"
+    ENABLE_COMMAND_PALETTE = False
 
     BINDINGS = [
         Binding("q", "quit", "quit"),
@@ -43,6 +35,7 @@ class PerfGlanceApp(App):
         Binding("+", "interval_up", "interval +"),
         Binding("-", "interval_down", "interval -"),
         Binding("s", "sort", "sort"),
+        Binding("u", "toggle_user_filter", "user filter"),
         Binding("up", "scroll_up", "scroll up"),
         Binding("down", "scroll_down", "scroll down"),
         Binding("?", "help", "help"),
@@ -171,3 +164,18 @@ class PerfGlanceApp(App):
         """Scroll process list down."""
         proc_widget = self.query_one("#processes", ProcessSection)
         proc_widget.do_scroll_down()
+
+    def action_toggle_user_filter(self) -> None:
+        """Toggle between all processes and current user's processes."""
+        try:
+            current_user = pwd.getpwuid(os.getuid()).pw_name
+        except (KeyError, OverflowError):
+            current_user = os.environ.get("USER", "")
+        proc_widget = self.query_one("#processes", ProcessSection)
+        active = proc_widget.toggle_user_filter(current_user)
+        self.notify(f"Showing {'only ' + current_user + ' processes' if active else 'all processes'}")
+        self._refresh()
+
+    def action_help(self) -> None:
+        """Show help (not yet implemented)."""
+        self.notify("Keybindings: q quit  r refresh  +/- interval  s sort  u user filter  ↑↓ scroll")

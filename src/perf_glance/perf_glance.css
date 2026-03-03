@@ -5,12 +5,12 @@ Vertical {
 }
 
 #cpu {
-    min-height: 18;
+    min-height: 4;
     height: auto;
 }
 
 #memory {
-    min-height: 5;
+    min-height: 3;
     height: auto;
 }
 

@@ -51,7 +51,7 @@ class MemorySection(Static):
 
         ram_pct = 100.0 * ram_used / ram_total if ram_total else 0
         text.append(
-            f"{bytes_to_human(ram_used, use_gib=True)} / {bytes_to_human(ram_total, use_gib=True)}  ({ram_pct:.0f}%)\n",
+            f"{bytes_to_human(ram_used, use_gib=False)} / {bytes_to_human(ram_total, use_gib=False)}  ({ram_pct:.0f}%)\n",
             style="white",
         )
 
@@ -63,7 +63,7 @@ class MemorySection(Static):
             text.append(f"[{FILLED * swap_w}{EMPTY * (BAR_WIDTH - swap_w)}]  ", style=mem_swap)
             swap_pct = 100.0 * swap_used / swap_total if swap_total else 0
             text.append(
-                f"{bytes_to_human(swap_used, use_gib=True)} / {bytes_to_human(swap_total, use_gib=True)}  ({swap_pct:.0f}%)\n",
+                f"{bytes_to_human(swap_used, use_gib=False)} / {bytes_to_human(swap_total, use_gib=False)}  ({swap_pct:.0f}%)\n",
                 style="white",
             )
 

@@ -22,8 +22,10 @@ def render_line_graph(
     if not values or width <= 0 or height <= 0:
         return ""
 
-    # Use the most recent `width` values
+    # Use the most recent `width` values; pad left with zeros if not enough history yet
     samples = values[-width:] if len(values) > width else values
+    if len(samples) < width:
+        samples = [0.0] * (width - len(samples)) + list(samples)
     if not samples:
         return ""
 

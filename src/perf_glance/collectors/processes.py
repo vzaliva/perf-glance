@@ -19,6 +19,7 @@ class ProcessInfo:
     cpu_pct: float
     rss_bytes: int
     cmdline: str
+    uid: int = 0
 
 
 def _page_size() -> int:
@@ -148,12 +149,24 @@ def read_processes(
         comm, ppid, utime, stime, rss_bytes = stat
         status = _read_status(pid)
         name = status.get("Name", comm)
-        exe = _read_exe(pid) or comm.strip("()")
         cmdline = _read_cmdline(pid)
-        if not exe and cmdline:
-            exe = cmdline.split()[0] if cmdline else comm
+        exe = _read_exe(pid)
+        if not exe:
+            # Prefer the longer of comm and cmdline basename to handle 15-char comm truncation
+            # without regressing on symlink-named binaries (e.g. /sbin/init -> systemd)
+            raw_cmdline_name = cmdline.split()[0].split("/")[-1] if cmdline else ""
+            # Strip trailing punctuation that some daemons append (e.g. "avahi-daemon:")
+            cmdline_name = raw_cmdline_name.rstrip(":,;")
+            comm_name = comm.strip("()")
+            exe = cmdline_name if len(cmdline_name) > len(comm_name) else comm_name
         if "/" in exe:
             exe = exe.split("/")[-1]
+
+        uid_raw = status.get("Uid", "0").split()
+        try:
+            uid = int(uid_raw[0]) if uid_raw else 0
+        except (ValueError, IndexError):
+            uid = 0
 
         total_time = utime + stime
         current_per_pid[pid] = (total_time, total_time)
@@ -174,6 +187,7 @@ def read_processes(
                 cpu_pct=cpu_pct,
                 rss_bytes=rss_bytes,
                 cmdline=cmdline,
+                uid=uid,
             )
         )
 
