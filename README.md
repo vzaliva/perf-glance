@@ -10,6 +10,7 @@ interpreters like Python and Node are transparent — `python myscript.py` shows
 *myscript*, not *python3*. (see [docs/grouping.md](docs/grouping.md) for
 technical details)
 
+Screenshot: **perf-glance** (left) vs **top** (right):
 ![perf-glance (left) vs top (right)](docs/perf-glance-vs-top.png)
 
 ## Features
@@ -44,15 +45,11 @@ uv tool install perf-glance
 perf-glance
 ```
 
-## Testing / Debugging
+## Contributing
 
-To dump the process group tree (fully expanded, as displayed) to stdout:
-
-```sh
-perf-glance --dump-groups
-perf-glance --dump-groups --dump-sort mem   # sort by memory
-perf-glance --dump-groups > output.txt      # redirect if needed
-```
+See [docs/Ideas.md](docs/Ideas.md) for a list of potential
+enhancements.  Feel free to submit a pull request implementing any of
+them.
 
 ## Configuration
 
@@ -64,8 +61,10 @@ Config file: `~/.config/perf-glance/config.toml` (created with defaults on first
 
 1. UI was inspired by [btop](https://github.com/aristocratos/btop)
 
-2. I vibe-coded this app with Claude Code. My goal was utilitarian: a tool I
-   needed plus an exploration of user-friendly process classification - not
-   polished code. However, I take full responsibility: I will maintain it, fix
-   bugs, and welcome pull requests.
+2. I vibe-coded this app with Claude Code. I know enough Python to
+   implement it myself, but my goal was not to write some beautiful
+   code. My objectives were utilitarian: 1) to build a tool I wanted
+   to have personally, 2) to explore an idea of user-friendly process
+   classification. However, I take full responsibility for this code
+   and I will maintain it, fix bugs, and welcome pull requests.
 
