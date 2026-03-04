@@ -16,6 +16,7 @@ class MockProcess:
     cpu_pct: float
     rss_bytes: int
     cmdline: str
+    uid: int = 0
 
 
 def test_group_processes_basic() -> None:
