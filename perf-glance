@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#   "perf-glance @ git+https://github.com/vzaliva/perf-glance.git",
+#   "perf-glance @ git+https://github.com/vzaliva/perf-glance.git@main",
 # ]
 # ///
 
