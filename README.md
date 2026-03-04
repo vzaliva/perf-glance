@@ -57,10 +57,14 @@ perf-glance --dump-groups > output.txt      # redirect if needed
 
 Config file: `~/.config/perf-glance/config.toml` (created with defaults on first run).
 
-## Disclaimer
+## Disclaimers
 
-I vibe-coded this app with Claude Code. My goal was utilitarian: a tool I needed
-plus an exploration of user-friendly process classification - not polished code.
-However, I take full responsibility: I will maintain it, fix bugs, and welcome
-pull requests.
+0. Linux-only; developed on Ubuntu - some behavior may be Ubuntu-specific
+
+1. UI was inspired by [btop](https://github.com/aristocratos/btop)
+
+2. I vibe-coded this app with Claude Code. My goal was utilitarian: a tool I
+   needed plus an exploration of user-friendly process classification - not
+   polished code. However, I take full responsibility: I will maintain it, fix
+   bugs, and welcome pull requests.
 
