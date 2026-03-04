@@ -8,7 +8,7 @@ import os
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
 from textual.binding import Binding
-from textual.widgets import Footer, Static
+from textual.widgets import Footer, Input, Static
 
 from perf_glance.collectors import (
     CPUSnapshot,
@@ -20,6 +20,7 @@ from perf_glance.collectors import (
 )
 from perf_glance.config import Config, load_config
 from perf_glance.grouping import group_processes
+from perf_glance.grouping.desktop_entries import scan_desktop_entries
 from perf_glance.widgets import CPUSection, MemorySection, ProcessSection
 
 
@@ -30,15 +31,22 @@ class PerfGlanceApp(App):
     ENABLE_COMMAND_PALETTE = False
 
     BINDINGS = [
-        Binding("q", "quit", "quit"),
-        Binding("r", "refresh", "refresh"),
-        Binding("+", "interval_up", "interval +"),
-        Binding("-", "interval_down", "interval -"),
-        Binding("s", "sort", "sort"),
-        Binding("u", "toggle_user_filter", "user filter"),
-        Binding("up", "scroll_up", "scroll up"),
-        Binding("down", "scroll_down", "scroll down"),
-        Binding("?", "help", "help"),
+        Binding("q", "quit", "quit", key_display="q"),
+        Binding("s", "sort", "sort", key_display="s"),
+        Binding("u", "toggle_user_filter", "user", key_display="u"),
+        Binding("enter", "expand", "expand", key_display="↵"),
+        Binding("/", "filter", "filter", key_display="/"),
+        Binding("?", "help", "help", key_display="?"),
+        # Hidden — still active, not shown in footer
+        Binding("r", "refresh", "refresh", show=False),
+        Binding("+", "interval_up", "+", show=False),
+        Binding("-", "interval_down", "-", show=False),
+        Binding("up", "scroll_up", "↑", show=False),
+        Binding("down", "scroll_down", "↓", show=False),
+        Binding("right", "expand", "expand", show=False),
+        Binding("left", "collapse", "collapse", show=False),
+        Binding("backspace", "collapse", "collapse", show=False),
+        Binding("escape", "clear_filter", "clear", show=False),
     ]
 
     def __init__(self, config: Config | None = None, iterations: int | None = None, **kwargs):
@@ -50,6 +58,7 @@ class PerfGlanceApp(App):
         self._prev_cpu_total = 0.0
         self._prev_per_pid: dict[int, tuple[int, int]] | None = None
         self._interval_timer: object | None = None  # Timer from set_interval
+        self._exe_to_app: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -57,9 +66,23 @@ class PerfGlanceApp(App):
             yield MemorySection(id="memory")
             with Container(id="process-container"):
                 yield ProcessSection(id="processes")
-        yield Footer()
+                yield Input(placeholder="Filter...", id="process-filter", disabled=True)
+        yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
+        dirs = getattr(self._config.grouping, "desktop_dirs", []) or []
+        self._exe_to_app = scan_desktop_entries(dirs) if dirs else {}
+        # Collect baseline for delta-based metrics (CPU% and process CPU%
+        # both require two reads with a time gap to compute deltas).
+        self._cpu_snapshot = read_cpu(None)
+        self._prev_cpu_total = get_aggregate_cpu_times()
+        _, self._prev_per_pid = read_processes(0.0, self._prev_cpu_total, None)
+        # Short delay so CPU ticks accumulate, then first visible refresh
+        self.set_timer(0.5, self._on_first_tick)
+
+    def _on_first_tick(self) -> None:
+        """First data refresh after baseline collection."""
+        self._refresh()
         self._start_interval_timer()
 
     def _refresh(self) -> None:
@@ -86,8 +109,8 @@ class PerfGlanceApp(App):
         groups = group_processes(
             processes,
             memory.ram_total_bytes,
-            self._config.grouping.force_name_group,
-            self._config.grouping.generic_parents,
+            self._config.grouping,
+            self._exe_to_app,
         )
 
         cpu_widget = self.query_one("#cpu", CPUSection)
@@ -161,9 +184,19 @@ class PerfGlanceApp(App):
         proc_widget.do_scroll_up()
 
     def action_scroll_down(self) -> None:
-        """Scroll process list down."""
+        """Move process list cursor down."""
         proc_widget = self.query_one("#processes", ProcessSection)
         proc_widget.do_scroll_down()
+
+    def action_expand(self) -> None:
+        """Expand selected process group (instant, no data refresh)."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        proc_widget.do_expand()
+
+    def action_collapse(self) -> None:
+        """Collapse selected process group (instant, no data refresh)."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        proc_widget.do_collapse()
 
     def action_toggle_user_filter(self) -> None:
         """Toggle between all processes and current user's processes."""
@@ -176,6 +209,44 @@ class PerfGlanceApp(App):
         self.notify(f"Showing {'only ' + current_user + ' processes' if active else 'all processes'}")
         self._refresh()
 
+    def action_filter(self) -> None:
+        """Show filter input."""
+        filt = self.query_one("#process-filter", Input)
+        filt.disabled = False
+        filt.styles.display = "block"
+        filt.value = self.query_one("#processes", ProcessSection)._text_filter
+        filt.focus()
+
+    def action_clear_filter(self) -> None:
+        """Clear filter and hide input (instant, no data refresh)."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        proc_widget.clear_text_filter()
+        filt = self.query_one("#process-filter", Input)
+        filt.styles.display = "none"
+        filt.disabled = True
+        filt.value = ""
+        self.set_focus(None)
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Apply filter when user presses Enter (instant, no data refresh)."""
+        if event.input.id == "process-filter":
+            proc_widget = self.query_one("#processes", ProcessSection)
+            proc_widget.set_text_filter(event.input.value)
+            event.input.styles.display = "none"
+            event.input.disabled = True
+            self.set_focus(None)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Filter as user types."""
+        if event.input.id == "process-filter":
+            proc_widget = self.query_one("#processes", ProcessSection)
+            proc_widget.set_text_filter(event.input.value)
+            proc_widget.update_processes(
+                proc_widget._groups,
+                self._config.theme,
+                max(5, (self.query_one("#process-container").size.height or 10) - 2),
+            )
+
     def action_help(self) -> None:
-        """Show help (not yet implemented)."""
-        self.notify("Keybindings: q quit  r refresh  +/- interval  s sort  u user filter  ↑↓ scroll")
+        """Show help."""
+        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  ↑↓ move  enter expand  ← collapse")

@@ -22,3 +22,13 @@ Vertical {
 #processes {
     scrollbar-size: 1 1;
 }
+
+/* Process list row selection highlight (reverse style in Text handles most of it) */
+#processes {
+    padding: 0 1;
+}
+
+#process-filter {
+    display: none;
+    height: 1;
+}
