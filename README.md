@@ -7,7 +7,8 @@ category in an expandable hierarchy. Expand Firefox to see "Isolated Web Co
 (24)", "WebExtensions", "RDD Process"; expand Cursor for Main Process, Zygote,
 Utility. `.desktop` files and known patterns recognize apps automatically;
 interpreters like Python and Node are transparent — `python myscript.py` shows
-*myscript*, not *python3*.
+*myscript*, not *python3*. (see [docs/grouping.md](docs/grouping.md) for
+technical details)
 
 ![perf-glance (left) vs top (right)](docs/perf-glance-vs-top.png)
 
