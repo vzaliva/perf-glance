@@ -167,9 +167,9 @@ def test_tool_reclaim_from_app() -> None:
     """Layer 2 tools reclaim processes from Layer 1 tree."""
     from perf_glance.grouping.process_groups import group_processes
 
-    # cursor (app) -> bash -> lake (tool): lake should go to tool group, not Cursor
+    # firefox (app) -> bash -> lake (tool): lake should go to tool group, not Firefox
     processes = [
-        MockProcess(100, 1, "cursor", "cursor", 1.0, 100_000_000, "cursor"),
+        MockProcess(100, 1, "firefox", "firefox", 1.0, 100_000_000, "firefox"),
         MockProcess(101, 100, "bash", "bash", 0.1, 10_000_000, "bash"),
         MockProcess(102, 101, "lake", "lake", 50.0, 200_000_000, "lake build"),
     ]
@@ -178,6 +178,52 @@ def test_tool_reclaim_from_app() -> None:
     tool_groups = [g for g in groups if g.category == "tool"]
     assert len(tool_groups) >= 1
     assert any("ake" in g.name for g in groups)
+
+
+def test_tool_not_reclaimed_from_agent_app() -> None:
+    """Layer 2 should not reclaim tools from agent-family apps (Claude/Codex)."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(100, 1, "claude", "claude", 1.0, 100_000_000, "claude"),
+        MockProcess(101, 100, "bash", "bash", 0.1, 10_000_000, "bash"),
+        MockProcess(102, 101, "lean", "lean", 50.0, 200_000_000, "lean Foo.lean"),
+        MockProcess(103, 101, "lake", "lake", 20.0, 80_000_000, "lake build"),
+    ]
+    config = _minimal_config()
+    groups = group_processes(processes, RAM, config, None)
+
+    claude = [g for g in groups if g.category == "app" and g.name.lower() == "claude"]
+    assert len(claude) == 1
+    claude_exes = {(p.exe or "").lower() for p in (claude[0].processes or [])}
+    assert "lean" in claude_exes
+    assert "lake" in claude_exes
+
+    tool_groups = [g for g in groups if g.category == "tool"]
+    assert len(tool_groups) == 0
+
+
+def test_tool_not_reclaimed_from_cursor_gui() -> None:
+    """Layer 2 should not reclaim tools from Cursor (GUI AI host app)."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(100, 1, "cursor", "cursor", 1.0, 100_000_000, "cursor"),
+        MockProcess(101, 100, "bash", "bash", 0.1, 10_000_000, "bash"),
+        MockProcess(102, 101, "lean", "lean", 50.0, 200_000_000, "lean Foo.lean"),
+        MockProcess(103, 101, "lake", "lake", 20.0, 80_000_000, "lake build"),
+    ]
+    config = _minimal_config()
+    groups = group_processes(processes, RAM, config, None)
+
+    cursor = [g for g in groups if g.category == "app" and g.name.lower() == "cursor"]
+    assert len(cursor) == 1
+    cursor_exes = {(p.exe or "").lower() for p in (cursor[0].processes or [])}
+    assert "lean" in cursor_exes
+    assert "lake" in cursor_exes
+
+    tool_groups = [g for g in groups if g.category == "tool"]
+    assert len(tool_groups) == 0
 
 
 def test_tool_build_label() -> None:

@@ -85,7 +85,7 @@ child detection:
   `--type=gpu-process`, `--type=zygote`, `--crashpad-handler` in cmdline, same
   exe in path → grouped under the app
 - **gecko**: children with `-contentproc` in cmdline, same exe
-- **agent**: TUI AI agents (Codex, Cursor Agent) — their subprocesses stay with
+- **agent**: TUI AI agents (Claude, Codex, Cursor Agent) — their subprocesses stay with
   the agent; Layer 2 does **not** reclaim them
 - unset: standard tree-walk only
 
@@ -95,9 +95,9 @@ groups.
 ### Layer 2: Build / Tool Grouping
 
 Exe match against built-in and user-configured tool patterns. Tools **reclaim**
-from Layer 1: e.g. `lake` and `lean` spawned by Cursor appear as "Lean build",
-not under Cursor. Exception: processes under `agent`-family apps are not
-reclaimed.
+from Layer 1 in general (for example under non-agent apps such as Firefox).
+Exception: processes under AI host apps (Claude, Codex, Cursor, Cursor Agent)
+are not reclaimed.
 
 ### Layer 3: System Categories
 

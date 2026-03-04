@@ -510,15 +510,17 @@ def group_processes(
     def is_assigned(pid: int) -> bool:
         return pid in pid_to_assignment
 
-    # Pids assigned to "agent"-family apps — Layer 2 must not reclaim these
-    # as tool groups, so that compilers/builds spawned by TUI agents stay
-    # attributed to the agent.
-    agent_pids: set[int] = set()
+    # Pids assigned to AI host apps — Layer 2 must not reclaim these as tool
+    # groups, so that compilers/builds spawned by agent UIs stay attributed to
+    # the host app.
+    no_tool_reclaim_pids: set[int] = set()
+    ai_host_app_names = {"claude", "codex", "cursor", "cursor agent"}
 
     def _assign_app(pid: int, app_name: str, uid: int, pattern: object) -> None:
         assign(pid, "app", f"{app_name}:{uid}")
-        if getattr(pattern, "family", "") == "agent":
-            agent_pids.add(pid)
+        family = str(getattr(pattern, "family", "") or "").lower()
+        if family == "agent" or app_name.lower() in ai_host_app_names:
+            no_tool_reclaim_pids.add(pid)
 
     # Layer 1: Application recognition
     for proc in processes:
@@ -594,10 +596,10 @@ def group_processes(
                 _assign_app(pid, match[0], uid, match[1] or object())
                 continue
 
-    # Layer 2: Tool grouping (reclaims from Layer 1, but not agent app children)
+    # Layer 2: Tool grouping (reclaims from Layer 1, but not AI-host app children)
     for proc in processes:
         pid = proc.pid
-        if pid in agent_pids:
+        if pid in no_tool_reclaim_pids:
             continue
         exe = effective_exe_map[pid]
         uid = proc.uid
