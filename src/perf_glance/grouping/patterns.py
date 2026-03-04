@@ -54,6 +54,7 @@ APP_PATTERNS = [
     AppPattern(exe="teams", name="Teams", family="electron"),
     AppPattern(exe="spotify", name="Spotify", family="electron"),
     AppPattern(exe="obsidian", name="Obsidian", family="electron"),
+    AppPattern(exe="claude", name="Claude", family="electron"),
     # Gecko (Firefox-based)
     AppPattern(exe="firefox", name="Firefox", family="gecko"),
     AppPattern(exe="thunderbird", name="Thunderbird", family="gecko"),
@@ -74,6 +75,7 @@ APP_PATTERNS = [
     AppPattern(exe="mpv", name="mpv"),
     AppPattern(exe="steam", name="Steam", family="electron"),
     AppPattern(exe="dropbox", name="Dropbox"),
+    AppPattern(exe="protonvpn-app", name="Proton VPN"),
     # Terminals (GUI process only — children are independent)
     AppPattern(exe="wezterm-gui", name="WezTerm"),
     AppPattern(exe="alacritty", name="Alacritty"),
@@ -122,6 +124,8 @@ TOOL_PATTERNS = [
     # Go toolchain
     ToolPattern(exe="go", name="Go", category="compiler"),
     ToolPattern(exe="gopls", name="Go", category="lsp"),
+    # Python package/task runners
+    ToolPattern(exe="uv", name="uv", category="build"),
     # Build systems
     ToolPattern(exe="make", name="Make", category="build"),
     ToolPattern(exe="ninja", name="Ninja", category="build"),
@@ -156,6 +160,7 @@ SYSTEM_CATEGORIES: dict[str, SystemCategoryDef] = {
         "exe": [
             "Xorg",
             "Xwayland",
+            "gdm-x-session",
             "mutter",
             "kwin",
             "sway",
@@ -188,6 +193,7 @@ SYSTEM_CATEGORIES: dict[str, SystemCategoryDef] = {
             "wireplumber",
             "pulseaudio",
             "alsa",
+            "speech-dispatcher",
             "speech-dispatch",
             "sd_espeak-ng",
             "sd_dummy",
@@ -197,12 +203,12 @@ SYSTEM_CATEGORIES: dict[str, SystemCategoryDef] = {
     "Network": {
         "exe": [
             "NetworkManager",
+            "networkmanager",
             "wpa_supplicant",
             "systemd-resolved",
             "openvpn",
+            "proton.vpn.daemon",
             "wireguard",
-            "protonvpn",
-            "protonvpn-app",
             "dnsmasq",
             "avahi-daemon",
         ],
@@ -226,14 +232,15 @@ SYSTEM_CATEGORIES: dict[str, SystemCategoryDef] = {
     "Security / Auth": {
         "exe": [
             "polkitd",
-            "gnome-keyring-d",
+            "polkit-agent-helper-1",
+            "gnome-keyring-daemon",
             "gpg-agent",
             "ssh-agent",
             "pam",
-            "at-spi-bus-laun",
-            "at-spi2-registr",
-            "xdg-permission-",
-            "xdg-document-po",
+            "at-spi-bus-launcher",
+            "at-spi2-registryd",
+            "xdg-permission-store",
+            "xdg-document-portal",
         ],
     },
     "Session / Desktop": {
@@ -241,19 +248,24 @@ SYSTEM_CATEGORIES: dict[str, SystemCategoryDef] = {
             "systemd",
             "dbus-daemon",
             "dconf-service",
-            "xdg-desktop-por",
-            "snapd-desktop-i",
+            "xdg-desktop-portal",
+            "xdg-desktop-portal-gtk",
+            "xdg-desktop-portal-gnome",
+            "snapd-desktop-integration",
+            "snap-handle-link",
+            "snap",
             "goa-daemon",
-            "goa-identity-se",
+            "goa-identity-service",
             "xss-lock",
             "xautolock",
             "flameshot",
             "nm-applet",
             "colord",
+            "gnome-remote-desktop-daemon",
         ],
     },
     "Logging / Monitoring": {
-        "exe": ["rsyslogd", "systemd-journal", "kerneloops", "abrtd"],
+        "exe": ["rsyslogd", "systemd-journald", "kerneloops", "abrtd"],
     },
     "Virtualization": {
         "exe": [

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pwd
+import re
 from dataclasses import dataclass, field
 
 from perf_glance.grouping.patterns import (
@@ -13,7 +14,7 @@ from perf_glance.grouping.patterns import (
 )
 
 # Type for ProcessInfo-like objects (from collectors.processes)
-from typing import Any
+from typing import Any, Callable
 
 ProcLike = Any
 
@@ -51,24 +52,157 @@ def _uid_to_user(uid: int) -> str:
         return str(uid)
 
 
+def _skip_flags(parts: list[str], start: int, flags_with_value: frozenset[str] = frozenset()) -> int:
+    """Return index of first non-flag argument at or after start."""
+    i = start
+    while i < len(parts):
+        arg = parts[i]
+        if arg == "--":
+            return i + 1
+        if not arg.startswith("-"):
+            return i
+        i += 1
+        base = arg.split("=")[0]
+        if base in flags_with_value and "=" not in arg:
+            i += 1  # skip value token
+    return i
+
+
+def _resolve_as_script(parts: list[str]) -> str | None:
+    """Runtime that runs a script: [exe] [-flags] script [args].
+    Handles `python -m module` and skips `-c` (inline code, no meaningful name)."""
+    i = 1
+    while i < len(parts):
+        arg = parts[i]
+        if arg == "-m" and i + 1 < len(parts):
+            return parts[i + 1]
+        if arg == "-c":
+            return None
+        if arg.startswith("-"):
+            i += 1
+            continue
+        return arg
+    return None
+
+
+_UV_FLAGS_WITH_VALUE: frozenset[str] = frozenset({
+    "--with", "--package", "-p", "--python", "--from",
+    "--extra", "--group", "--only-group", "--directory", "-C",
+})
+
+
+def _resolve_uv(parts: list[str]) -> str | None:
+    """uv run / uv tool run / uv tool uvx — resolve the actual command being run."""
+    if len(parts) < 3:
+        return None
+    sub = parts[1]
+    if sub == "run":
+        i = _skip_flags(parts, 2, _UV_FLAGS_WITH_VALUE)
+        return parts[i] if i < len(parts) else None
+    if sub == "tool" and len(parts) >= 4 and parts[2] in ("run", "uvx"):
+        i = _skip_flags(parts, 3, _UV_FLAGS_WITH_VALUE)
+        return parts[i] if i < len(parts) else None
+    return None
+
+
+def _resolve_uvx(parts: list[str]) -> str | None:
+    """uvx <cmd> [args] — standalone alias for `uv tool run`."""
+    i = _skip_flags(parts, 1, _UV_FLAGS_WITH_VALUE)
+    return parts[i] if i < len(parts) else None
+
+
+def _resolve_go_run(parts: list[str]) -> str | None:
+    """go run [flags] <file/pkg> [args]"""
+    if len(parts) < 3 or parts[1] != "run":
+        return None
+    i = _skip_flags(parts, 2)
+    return parts[i] if i < len(parts) else None
+
+
+_JAVA_FLAGS_WITH_VALUE: frozenset[str] = frozenset({
+    "-cp", "-classpath", "--class-path", "-p", "--module-path",
+    "--add-modules", "--module", "-m", "--add-opens", "--add-exports",
+    "--add-reads", "-javaagent",
+})
+
+
+def _resolve_java(parts: list[str]) -> str | None:
+    """java [options] {-jar jarfile | MainClass} [args]"""
+    i = 1
+    while i < len(parts):
+        arg = parts[i]
+        if arg == "-jar" and i + 1 < len(parts):
+            return parts[i + 1]
+        if arg in _JAVA_FLAGS_WITH_VALUE:
+            i += 2
+            continue
+        if arg.startswith("-"):
+            i += 1
+            continue
+        # Fully-qualified class name → take last component
+        return arg.split(".")[-1] or arg
+    return None
+
+
+# Built-in launcher resolvers.  For each wrapper exe, a function that parses
+# the cmdline parts and returns the real program name (or None if not resolvable).
+_LAUNCHER_RESOLVERS: dict[str, Callable[[list[str]], str | None]] = {
+    # Python family
+    "python":     _resolve_as_script,
+    "python2":    _resolve_as_script,
+    "python3":    _resolve_as_script,
+    "python3.9":  _resolve_as_script,
+    "python3.10": _resolve_as_script,
+    "python3.11": _resolve_as_script,
+    "python3.12": _resolve_as_script,
+    "python3.13": _resolve_as_script,
+    # Shells (also in generic_parents — both apply)
+    "bash":  _resolve_as_script,
+    "sh":    _resolve_as_script,
+    "dash":  _resolve_as_script,
+    "zsh":   _resolve_as_script,
+    "fish":  _resolve_as_script,
+    # Other runtimes
+    "node":  _resolve_as_script,
+    "ruby":  _resolve_as_script,
+    "perl":  _resolve_as_script,
+    # Package/task runners
+    "uv":    _resolve_uv,
+    "uvx":   _resolve_uvx,
+    # JVM
+    "java":  _resolve_java,
+    # Go
+    "go":    _resolve_go_run,
+}
+
+
 def _effective_exe(proc: ProcLike, transparent_runtimes: set[str]) -> str:
-    """Get effective exe for grouping: through transparent runtimes to script."""
+    """Get effective exe: resolve launcher wrappers to the actual program being run.
+
+    Checks built-in _LAUNCHER_RESOLVERS first (handles -m, subcommands, flags),
+    then falls back to transparent_runtimes (user-configured, simple argv[1] lookup).
+    """
     exe = (getattr(proc, "exe", None) or getattr(proc, "name", None) or "").strip()
     if not exe or "/" in exe:
         exe = exe.split("/")[-1] if exe else ""
     exe_lower = exe.lower()
-    if exe_lower not in transparent_runtimes:
-        return exe_lower
-    cmdline = getattr(proc, "cmdline", None) or ""
-    if not cmdline:
-        return exe_lower
-    parts = cmdline.split()
-    if len(parts) < 2:
-        return exe_lower
-    script = parts[1]
-    if "/" in script:
-        script = script.split("/")[-1]
-    return script.lower().rstrip(":,;")
+
+    resolver = _LAUNCHER_RESOLVERS.get(exe_lower)
+    if resolver is None and exe_lower in transparent_runtimes:
+        resolver = _resolve_as_script
+
+    if resolver:
+        cmdline = getattr(proc, "cmdline", None) or ""
+        if cmdline:
+            parts = cmdline.split()
+            if len(parts) >= 2:
+                result = resolver(parts)
+                if result:
+                    if "/" in result:
+                        result = result.split("/")[-1]
+                    cleaned = result.lower().rstrip(":,;")
+                    return cleaned or exe_lower
+    return exe_lower
 
 
 def _normalize_exe(exe: str) -> str:
@@ -78,26 +212,41 @@ def _normalize_exe(exe: str) -> str:
     return exe.lower().split("/")[-1].rstrip(":,;")
 
 
+_VERSION_SUFFIX_RE = re.compile(r"[-_.]\d+(\.\d+)*$")
+
+
+def _strip_version_suffix(exe: str) -> str:
+    """Strip version suffix like -30.2 or .3.12 from exe name."""
+    return _VERSION_SUFFIX_RE.sub("", exe)
+
+
 def _match_app(
     effective: str,
     cmdline: str,
     app_patterns: list,
     exe_to_app: dict[str, str],
+    desktop_excluded: frozenset[str] = frozenset(),
 ) -> tuple[str, object] | None:
-    """Match process against app patterns. Returns (display_name, pattern) or None."""
+    """Match process against app patterns. Returns (display_name, pattern) or None.
+
+    desktop_excluded: exe names that should NOT match via exe_to_app (system/generic processes).
+    """
     effective_lower = effective.lower()
+    effective_base = _strip_version_suffix(effective_lower)
     cmdline_lower = (cmdline or "").lower()
     # Priority: config apps, built-in APP_PATTERNS, desktop exe_to_app
     for pattern in app_patterns:
         exe = getattr(pattern, "exe", "").lower()
-        if effective_lower != exe:
+        if effective_lower != exe and effective_base != exe:
             continue
         cmdline_pat = getattr(pattern, "cmdline", "") or ""
         if cmdline_pat and cmdline_pat.lower() not in cmdline_lower:
             continue
         return (getattr(pattern, "name", exe), pattern)
-    if effective_lower in exe_to_app:
-        return (exe_to_app[effective_lower], None)
+    if effective_lower not in desktop_excluded:
+        key = effective_lower if effective_lower in exe_to_app else effective_base
+        if key in exe_to_app:
+            return (exe_to_app[key], None)
     return None
 
 
@@ -151,6 +300,7 @@ def _ancestor_matches_app(
     exe_to_app: dict[str, str],
     generic_set: set[str],
     terminal_exes: set[str],
+    desktop_excluded: frozenset[str] = frozenset(),
 ) -> tuple[str, object] | None:
     """Walk up tree; return (app_name, pattern) if any ancestor matches app."""
     current = pid
@@ -164,14 +314,11 @@ def _ancestor_matches_app(
         cmdline = getattr(proc, "cmdline", "") or ""
         if exe in terminal_exes:
             return None
-        match = _match_app(exe, cmdline, app_patterns, exe_to_app)
+        match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
         if match:
             return match
         ppid = ppid_map.get(current)
         if not ppid or ppid == current or ppid not in ppid_map:
-            break
-        parent_exe = effective_exe_map.get(ppid, "")
-        if parent_exe and parent_exe not in generic_set:
             break
         current = ppid
     return None
@@ -278,6 +425,14 @@ def group_processes(
         "konsole", "xterm",
     }
 
+    # Build set of all exe names claimed by system categories so Layer 1
+    # .desktop fallback doesn't steal them (e.g. picom, i3, nm-applet).
+    system_exes: set[str] = set()
+    for cat_def in SYSTEM_CATEGORIES.values():
+        for e in cat_def.get("exe", []):  # type: ignore[union-attr]
+            system_exes.add(e.lower())
+    desktop_excluded: frozenset[str] = frozenset(system_exes | generic_set)
+
     # pid -> (layer, group_key)  group_key is "name:uid" or category name
     pid_to_assignment: dict[int, tuple[str, str]] = {}
 
@@ -295,12 +450,16 @@ def group_processes(
         exe = effective_exe_map[pid]
         cmdline = proc.cmdline or ""
         uid = proc.uid
-        user_str = _uid_to_user(uid)
 
         if not proc.cmdline:
             continue
 
-        match = _match_app(exe, cmdline, app_patterns, exe_to_app)
+        # Generic parents (shells, sudo, etc.) are transparent wrappers —
+        # they should not become app groups themselves.
+        if exe in generic_set:
+            continue
+
+        match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
         if match:
             app_name, pattern = match
             if pattern:
@@ -330,6 +489,7 @@ def group_processes(
         ancestor_match = _ancestor_matches_app(
             pid, ppid_map, pid_to_proc, effective_exe_map,
             app_patterns, exe_to_app, generic_set, terminal_exes,
+            desktop_excluded,
         )
         if ancestor_match:
             app_name, _ = ancestor_match
@@ -342,7 +502,7 @@ def group_processes(
             root_exe = effective_exe_map.get(root, _normalize_exe(root_proc.exe or ""))
             root_match = _match_app(
                 root_exe, root_proc.cmdline or "",
-                app_patterns, exe_to_app,
+                app_patterns, exe_to_app, desktop_excluded,
             )
             if root_match and root_match[0] and root_match[0] not in terminal_exes:
                 app_name = root_match[0]
@@ -350,7 +510,7 @@ def group_processes(
                 continue
 
         if exe in terminal_exes:
-            match = _match_app(exe, cmdline, app_patterns, exe_to_app)
+            match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
             if match:
                 assign(pid, "app", f"{match[0]}:{uid}")
                 continue
@@ -365,14 +525,10 @@ def group_processes(
             tool_name, _ = tool_match
             assign(pid, "tool", f"{tool_name}:{uid}")
 
-    # Layer 3: System categories (with cgroup refinement for Session/Desktop)
-    try:
-        from perf_glance.grouping.cgroups import get_cgroup_unit
-        _has_cgroups = True
-    except ImportError:
-        _has_cgroups = False
-        get_cgroup_unit = None
-
+    # Layer 3: System categories.
+    # Split "current user" from system accounts so e.g. lord's session tools
+    # and security agents appear in their own groups.
+    current_uid = os.getuid()
     for proc in processes:
         if is_assigned(proc.pid):
             continue
@@ -382,12 +538,10 @@ def group_processes(
         exe = effective_exe_map[proc.pid]
         cat = _match_system_category(proc, exe, category_overrides)
         if cat:
-            key = cat
-            if cat == "Session / Desktop" and _has_cgroups and get_cgroup_unit:
-                unit = get_cgroup_unit(proc.pid)
-                if unit:
-                    key = f"{cat}:{unit}"
-            assign(proc.pid, "system", key)
+            # Use uid in key only for current user; all other system accounts
+            # share the same group per category.
+            uid_key = proc.uid if proc.uid == current_uid else -1
+            assign(proc.pid, "system", f"{cat}:{uid_key}")
 
     # Layer 4: Catch-all
     for proc in processes:
@@ -422,10 +576,9 @@ def group_processes(
             name = "Kernel"
             user = "root"
         elif layer == "system":
-            if rest.startswith("Session / Desktop:"):
-                name = rest.split(":", 1)[1]
-            else:
-                name = rest
+            # rest format: "Category Name:uid_key"  (uid_key is current uid or -1)
+            cat_name, _, _ = rest.rpartition(":")
+            name = cat_name if cat_name else rest
         elif layer == "app":
             name = rest.rsplit(":", 1)[0] if ":" in rest else rest
         elif layer == "tool":
@@ -438,7 +591,9 @@ def group_processes(
                 exe_part = rest[4:].rsplit(":", 1)[0]
             else:
                 exe_part = rest
-            name = procs[0].exe or procs[0].name or exe_part or "[other]"
+            # Prefer the resolved effective exe over the raw proc.exe
+            # (e.g. show "proton.vpn.daemon" instead of "python3")
+            name = exe_part or procs[0].exe or procs[0].name or "[other]"
 
         if not name or not name.strip():
             name = "[other]"
@@ -524,6 +679,8 @@ def _build_hierarchy(
         for x in (getattr(config, "default_expanded", None) or [])
     }
     expand_threshold = getattr(config, "expand_threshold", 0) or 0
+    tr = getattr(config, "transparent_runtimes", None) or []
+    transparent_runtimes: set[str] = {str(r).lower() for r in (tr if isinstance(tr, list) else [])}
 
     result: list[ProcessGroup] = []
     for g in groups:
@@ -555,7 +712,7 @@ def _build_hierarchy(
         elif g.category == "system" and len(procs) > 1 and g.name != "Kernel":
             children = _build_subgroups(
                 procs,
-                lambda p: _normalize_exe(p.exe or p.name or "unknown"),
+                lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
                 g.user, "system", ram_total_bytes,
             )
 

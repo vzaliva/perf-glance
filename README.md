@@ -1,6 +1,8 @@
 # perf-glance
 
-A terminal-based system utilization monitor for Linux, inspired by btop but focused on high-level, grouped process views rather than raw process lists.
+A terminal-based system utilization monitor for Linux. Presents a holistic,
+hierarchical view of system activity, grouping processes by category (apps,
+build tools, system services) rather than raw process lists.
 
 ## Features
 
@@ -31,6 +33,16 @@ uvx perf-glance
 ```sh
 uv tool install perf-glance
 perf-glance
+```
+
+## Testing / Debugging
+
+To dump the process group tree (fully expanded, as displayed) to stdout:
+
+```sh
+perf-glance --dump-groups
+perf-glance --dump-groups --dump-sort mem   # sort by memory
+perf-glance --dump-groups > output.txt      # redirect if needed
 ```
 
 ## Configuration

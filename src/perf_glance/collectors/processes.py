@@ -90,13 +90,24 @@ def _read_cmdline(pid: int) -> str:
         return ""
 
 
+_VERSION_EXE_RE = re.compile(r"^\d+(\.\d+)+$")
+
+
 def _read_exe(pid: int) -> str:
     """Read resolved exe path for process."""
     try:
         path = Path(f"/proc/{pid}/exe")
         if not path.exists():
             return ""
-        return path.resolve().name
+        resolved = path.resolve()
+        name = resolved.name
+        # If basename is purely a version number (e.g. "2.1.63" from Claude desktop),
+        # use the grandparent directory name as the app name.
+        if _VERSION_EXE_RE.match(name):
+            grandparent = resolved.parent.parent.name
+            if grandparent and not _VERSION_EXE_RE.match(grandparent):
+                return grandparent
+        return name
     except (OSError, PermissionError, RuntimeError):
         return ""
 
