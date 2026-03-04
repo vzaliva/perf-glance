@@ -24,7 +24,6 @@ class MockProcess:
 def _minimal_config(
     generic_parents: list[str] | None = None,
     tools: list | None = None,
-    force_name_group: list[str] | None = None,
     transparent_runtimes: list[str] | None = None,
     category_overrides: dict[str, str] | None = None,
     default_expanded: list[str] | None = None,
@@ -39,7 +38,6 @@ def _minimal_config(
         category_overrides=category_overrides or {},
         other_cpu_max=0.1,
         other_mem_max=30 << 20,
-        force_name_group=force_name_group or [],
         default_expanded=default_expanded or [],
         expand_threshold=expand_threshold,
     )
@@ -147,15 +145,16 @@ def test_multi_user_same_app() -> None:
 
 # ── Layer 2: Tool grouping ──────────────────────────────────────────────
 
-def test_force_name_group() -> None:
-    """force_name_group (migrated to tools) groups by exe regardless of tree."""
+def test_tool_group_by_exe() -> None:
+    """Tool patterns group by exe regardless of tree."""
     from perf_glance.grouping.process_groups import group_processes
+    from perf_glance.grouping.patterns import ToolPattern
 
     processes = [
         MockProcess(100, 50, "cc1", "cc1", 10.0, 50_000_000, "cc1"),
         MockProcess(101, 60, "cc1", "cc1", 12.0, 60_000_000, "cc1"),
     ]
-    config = _minimal_config(force_name_group=["cc1"])
+    config = _minimal_config(tools=[ToolPattern(exe="cc1", name="GCC", category="compiler")])
     groups = group_processes(processes, RAM, config, None)
     assert len(groups) == 1
     assert groups[0].proc_count == 2
@@ -244,12 +243,13 @@ def test_tool_build_label() -> None:
 
 def test_lean_coq_ocaml_patterns() -> None:
     """Built-in patterns recognize Lean, Coq/Rocq, OCaml tools."""
-    from perf_glance.grouping.patterns import TOOL_PATTERNS
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
 
-    tool_exes = {p.exe.lower() for p in TOOL_PATTERNS}
+    rules = load_grouping_rules_cached()
+    tool_exes = {p.exe.lower() for p in rules.tools}
     for exe in ["lean", "lake", "leanc", "coqc", "coqtop", "rocq", "rocqc",
                 "ocamlopt", "ocamlc", "dune", "opam"]:
-        assert exe in tool_exes, f"{exe} not in TOOL_PATTERNS"
+        assert exe in tool_exes, f"{exe} not in rules tools"
 
 
 # ── Layer 3: System categories ──────────────────────────────────────────
@@ -617,14 +617,16 @@ def test_parse_bytes() -> None:
     assert _parse_bytes("") == 30 << 20  # default
 
 
-def test_config_grouping_defaults() -> None:
+def test_config_grouping_defaults(tmp_path) -> None:
     """Default GroupingConfig has expected values."""
-    from perf_glance.config import GroupingConfig, DEFAULT_GENERIC_PARENTS, DEFAULT_TRANSPARENT_RUNTIMES
+    from perf_glance.config import load_config
 
-    gc = GroupingConfig()
-    assert "bash" in gc.generic_parents
-    assert "python3" in gc.transparent_runtimes
-    assert gc.other_cpu_max == 0.1
+    cfg = load_config(tmp_path / "config.toml")
+    assert len(cfg.grouping.generic_parents) > 0
+    assert len(cfg.grouping.transparent_runtimes) > 0
+    assert len(cfg.grouping.apps) > 0
+    assert len(cfg.grouping.tools) > 0
+    assert cfg.grouping.other_cpu_max == 0.1
 
 
 # ── Effective exe resolution ────────────────────────────────────────────
@@ -632,22 +634,28 @@ def test_config_grouping_defaults() -> None:
 def test_effective_exe_normal() -> None:
     """Non-runtime exe returns as-is (lowercased)."""
     from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
 
     proc = MockProcess(1, 0, "firefox", "firefox", 0, 0, "firefox")
-    assert _effective_exe(proc, set()) == "firefox"
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "firefox"
 
 
 def test_effective_exe_transparent_runtime() -> None:
     """Transparent runtime resolves to script name."""
     from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
 
     proc = MockProcess(1, 0, "python3", "python3", 0, 0, "/usr/bin/python3 /usr/bin/blueman-tray")
-    assert _effective_exe(proc, {"python3"}) == "blueman-tray"
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, {"python3"}, rules.launchers_by_exe) == "blueman-tray"
 
 
 def test_effective_exe_runtime_no_args() -> None:
     """Transparent runtime with no script arg returns runtime name."""
     from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
 
     proc = MockProcess(1, 0, "python3", "python3", 0, 0, "python3")
-    assert _effective_exe(proc, {"python3"}) == "python3"
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, {"python3"}, rules.launchers_by_exe) == "python3"

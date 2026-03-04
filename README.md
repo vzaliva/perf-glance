@@ -1,14 +1,17 @@
 # perf-glance
 
-A terminal-based system utilization monitor for Linux. Instead of hundreds of
-raw process names, you see **Firefox** (35 procs, 13G), **Cursor** (29 procs),
-**Slack**, **Discord** — apps, build tools, and system services grouped by
-category in an expandable hierarchy. Expand Firefox to see "Isolated Web Co
-(24)", "WebExtensions", "RDD Process"; expand Cursor for Main Process, Zygote,
-Utility. `.desktop` files and known patterns recognize apps automatically;
-interpreters like Python and Node are transparent — `python myscript.py` shows
-*myscript*, not *python3*. (see [docs/grouping.md](docs/grouping.md) for
-technical details)
+A terminal-based system utilization monitor for Linux. Instead of
+hundreds of raw process names, you see **Firefox** (35 procs, 13G),
+**Cursor** (29 procs), **Slack**, **Discord** — apps, build tools, and
+system services grouped by category in an expandable hierarchy. Expand
+Firefox to see "Isolated Web Co (24)", "WebExtensions", "RDD Process";
+expand Cursor for Main Process, Zygote, Utility. `.desktop` files and
+known patterns recognize apps automatically; interpreters like Python
+and Node are transparent — `python myscript.py` shows *myscript*, not
+*python3*.
+
+See [docs/grouping.md](docs/grouping.md) for grouping internals and
+[docs/rules.md](docs/rules.md) for user-configurable grouping rules.
 
 Screenshot: **perf-glance** (left) vs **top** (right):
 ![perf-glance (left) vs top (right)](docs/perf-glance-vs-top.png)
@@ -19,6 +22,7 @@ Screenshot: **perf-glance** (left) vs **top** (right):
 - CPU frequency and temperature (when available)
 - Memory (RAM and swap) with used/cached distinction
 - Hierarchical process grouping with expand/collapse
+- Configurable grouping rules via `rules.d` 
 - Process table `Cum%` column: cumulative CPU share since reset
 - Configurable refresh interval, sorting, and theme
 
@@ -48,13 +52,14 @@ perf-glance
 
 ## Contributing
 
-See [docs/Ideas.md](docs/Ideas.md) for a list of potential
-enhancements.  Feel free to submit a pull request implementing any of
-them.
+See [docs/TODO.md](docs/TODO.md) for a list of potential enhancements.
+Feel free to submit a pull request implementing any of them. Also see
+[docs/dev.md](docs/dev.md) for development hints.
 
 ## Configuration
 
 Config file: `~/.config/perf-glance/config.toml` (created with defaults on first run).
+Grouping rules: `~/.config/perf-glance/rules.d/*.toml` (see [docs/rules.md](docs/rules.md)).
 
 ## Disclaimers
 

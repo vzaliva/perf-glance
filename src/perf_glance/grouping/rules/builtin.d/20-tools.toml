@@ -1,0 +1,277 @@
+schema_version = 1
+
+[[tool]]
+id = "tool.lean"
+exe = "lean"
+name = "Lean"
+category = "compiler"
+
+[[tool]]
+id = "tool.lake"
+exe = "lake"
+name = "Lake"
+category = "build"
+
+[[tool]]
+id = "tool.leanc"
+exe = "leanc"
+name = "Lean"
+category = "compiler"
+
+[[tool]]
+id = "tool.coqc"
+exe = "coqc"
+name = "Coq"
+category = "compiler"
+
+[[tool]]
+id = "tool.coqtop"
+exe = "coqtop"
+name = "Coq"
+category = "compiler"
+
+[[tool]]
+id = "tool.coqchk"
+exe = "coqchk"
+name = "Coq"
+category = "compiler"
+
+[[tool]]
+id = "tool.coqidetop"
+exe = "coqidetop"
+name = "Coq"
+category = "compiler"
+
+[[tool]]
+id = "tool.rocq"
+exe = "rocq"
+name = "Rocq"
+category = "compiler"
+
+[[tool]]
+id = "tool.rocqc"
+exe = "rocqc"
+name = "Rocq"
+category = "compiler"
+
+[[tool]]
+id = "tool.dune"
+exe = "dune"
+name = "Dune"
+category = "build"
+
+[[tool]]
+id = "tool.ocamlopt"
+exe = "ocamlopt"
+name = "OCaml"
+category = "compiler"
+
+[[tool]]
+id = "tool.ocamlc"
+exe = "ocamlc"
+name = "OCaml"
+category = "compiler"
+
+[[tool]]
+id = "tool.ocamlfind"
+exe = "ocamlfind"
+name = "OCaml"
+category = "build"
+
+[[tool]]
+id = "tool.ocamldep"
+exe = "ocamldep"
+name = "OCaml"
+category = "compiler"
+
+[[tool]]
+id = "tool.ocamllex"
+exe = "ocamllex"
+name = "OCaml"
+category = "compiler"
+
+[[tool]]
+id = "tool.ocamlyacc"
+exe = "ocamlyacc"
+name = "OCaml"
+category = "compiler"
+
+[[tool]]
+id = "tool.opam"
+exe = "opam"
+name = "opam"
+category = "build"
+
+[[tool]]
+id = "tool.gcc"
+exe = "gcc"
+name = "GCC"
+category = "compiler"
+
+[[tool]]
+id = "tool.gxx"
+exe = "g++"
+name = "GCC"
+category = "compiler"
+
+[[tool]]
+id = "tool.cc1"
+exe = "cc1"
+name = "GCC"
+category = "compiler"
+
+[[tool]]
+id = "tool.cc1plus"
+exe = "cc1plus"
+name = "GCC"
+category = "compiler"
+
+[[tool]]
+id = "tool.clang"
+exe = "clang"
+name = "Clang"
+category = "compiler"
+
+[[tool]]
+id = "tool.clangxx"
+exe = "clang++"
+name = "Clang"
+category = "compiler"
+
+[[tool]]
+id = "tool.ld"
+exe = "ld"
+name = "Linker"
+category = "compiler"
+
+[[tool]]
+id = "tool.ld_lld"
+exe = "ld.lld"
+name = "Linker"
+category = "compiler"
+
+[[tool]]
+id = "tool.ld_gold"
+exe = "ld.gold"
+name = "Linker"
+category = "compiler"
+
+[[tool]]
+id = "tool.as"
+exe = "as"
+name = "Assembler"
+category = "compiler"
+
+[[tool]]
+id = "tool.rustc"
+exe = "rustc"
+name = "Rust"
+category = "compiler"
+
+[[tool]]
+id = "tool.cargo"
+exe = "cargo"
+name = "Cargo"
+category = "build"
+
+[[tool]]
+id = "tool.rust_analyzer"
+exe = "rust-analyzer"
+name = "Rust"
+category = "lsp"
+
+[[tool]]
+id = "tool.go"
+exe = "go"
+name = "Go"
+category = "compiler"
+
+[[tool]]
+id = "tool.gopls"
+exe = "gopls"
+name = "Go"
+category = "lsp"
+
+[[tool]]
+id = "tool.uv"
+exe = "uv"
+name = "uv"
+category = "build"
+
+[[tool]]
+id = "tool.make"
+exe = "make"
+name = "Make"
+category = "build"
+
+[[tool]]
+id = "tool.ninja"
+exe = "ninja"
+name = "Ninja"
+category = "build"
+
+[[tool]]
+id = "tool.cmake"
+exe = "cmake"
+name = "CMake"
+category = "build"
+
+[[tool]]
+id = "tool.meson"
+exe = "meson"
+name = "Meson"
+category = "build"
+
+[[tool]]
+id = "tool.bazel"
+exe = "bazel"
+name = "Bazel"
+category = "build"
+
+[[tool]]
+id = "tool.scons"
+exe = "scons"
+name = "SCons"
+category = "build"
+
+[[tool]]
+id = "tool.ghc"
+exe = "ghc"
+name = "GHC"
+category = "compiler"
+
+[[tool]]
+id = "tool.cabal"
+exe = "cabal"
+name = "Cabal"
+category = "build"
+
+[[tool]]
+id = "tool.stack"
+exe = "stack"
+name = "Stack"
+category = "build"
+
+[[tool]]
+id = "tool.javac"
+exe = "javac"
+name = "Java"
+category = "compiler"
+
+[[tool]]
+id = "tool.java"
+exe = "java"
+name = "Java"
+category = "runtime"
+
+[[tool]]
+id = "tool.gradle"
+exe = "gradle"
+name = "Gradle"
+category = "build"
+
+[[tool]]
+id = "tool.mvn"
+exe = "mvn"
+name = "Maven"
+category = "build"

@@ -2,6 +2,9 @@
 
 How perf-glance groups processes into a hierarchical, categorized view.
 
+For rule customization (`app`, `tool`, `launcher`, category overrides, and list
+patches), see [Grouping Rules](rules.md).
+
 ## Overview
 
 Processes flow through four layers. Each layer claims processes not yet
@@ -50,8 +53,8 @@ If the resolved name is a **generic entrypoint** (`index.js`, `main.py`,
 
 Processes like `systemd`, `bash`, `sudo`, `tmux` are treated as transparent:
 when walking the process tree, we skip over them and keep going. They never
-become group roots themselves. Configurable via `generic_parents` (default
-includes systemd, init, bash, sh, zsh, fish, sudo, tmux, screen, etc.).
+become group roots themselves. Defaults include systemd, init, bash, sh, zsh,
+fish, sudo, tmux, screen, etc., and can be adjusted via `rules.d`.
 
 ### Parent Tracing (Ancestor Walk)
 
@@ -106,8 +109,8 @@ or a match function (Kernel: empty cmdline). Categories include Kernel, Display
 Server, Window Manager, Audio, Network, Bluetooth, File Services, Security /
 Auth, Session / Desktop, Logging / Monitoring, Virtualization.
 
-`category_overrides` in config can move an exe into a category or exclude it
-(empty string → Layer 4).
+`category_override` rules in `rules.d` can move an exe into a category or
+exclude it (empty string → Layer 4).
 
 ### Layer 4: Catch-all
 
@@ -127,32 +130,20 @@ App groups with multiple processes get sub-groups:
 
 Expand/collapse with Enter/→ and ←/Backspace. Expansion state is persisted.
 
-## Configuration (Representative)
+## Configuration
+
+Rule customization is in `rules.d` files. See [Grouping Rules](rules.md) for
+schema, precedence, and examples.
+
+`config.toml` still controls non-rule knobs under `[grouping]`:
 
 ```toml
 [grouping]
 desktop_dirs = ["/usr/share/applications", "~/.local/share/applications", ...]
-generic_parents = ["systemd", "init", "bash", "sh", "zsh", "fish", "sudo", "tmux", ...]
-transparent_runtimes = ["python", "python3", "node", "ruby", "perl"]
 other_cpu_max = 0.1
 other_mem_max = "30M"
-
-# Add or override app
-[[grouping.apps]]
-exe = "my-app"
-name = "My App"
-family = "electron"   # optional: electron | gecko | chromium | agent
-
-# Add or override tool
-[[grouping.tools]]
-exe = "my-compiler"
-name = "My Compiler"
-category = "compiler"
-
-# Move exe to category, or "" to exclude
-[grouping.category_overrides]
-"protonvpn-app" = "Network"
+default_expanded = []
+expand_threshold = 0
 ```
 
-Exe matching is case-insensitive, basename only (no path). `cmdline` on app
-patterns is an optional substring match (e.g. `java` + `cmdline = "idea.main"`).
+Exe matching in rules is case-insensitive and basename-based (no path).

@@ -1,0 +1,250 @@
+schema_version = 1
+
+[[launcher]]
+id = "launcher.python"
+exe = "python"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python2"
+exe = "python2"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3"
+exe = "python3"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3_9"
+exe = "python3.9"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3_10"
+exe = "python3.10"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3_11"
+exe = "python3.11"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3_12"
+exe = "python3.12"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.python3_13"
+exe = "python3.13"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+module_flag = "-m"
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.bash"
+exe = "bash"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.sh"
+exe = "sh"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.dash"
+exe = "dash"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.zsh"
+exe = "zsh"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.fish"
+exe = "fish"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+abort_flags = ["-c"]
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.node"
+exe = "node"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.ruby"
+exe = "ruby"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.perl"
+exe = "perl"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+[launcher.transform]
+generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.uv.run"
+exe = "uv"
+[launcher.match]
+argv1_in = ["run"]
+min_argv = 3
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 2
+flags_with_value = ["--with", "--package", "-p", "--python", "--from", "--extra", "--group", "--only-group", "--directory", "-C"]
+
+[[launcher]]
+id = "launcher.uv.tool.run"
+exe = "uv"
+[launcher.match]
+argv_prefix = ["tool", "run"]
+min_argv = 4
+[[launcher.step]]
+kind = "first_non_flag_after_prefix"
+flags_with_value = ["--with", "--package", "-p", "--python", "--from", "--extra", "--group", "--only-group", "--directory", "-C"]
+
+[[launcher]]
+id = "launcher.uv.tool.uvx"
+exe = "uv"
+[launcher.match]
+argv_prefix = ["tool", "uvx"]
+min_argv = 4
+[[launcher.step]]
+kind = "first_non_flag_after_prefix"
+flags_with_value = ["--with", "--package", "-p", "--python", "--from", "--extra", "--group", "--only-group", "--directory", "-C"]
+
+[[launcher]]
+id = "launcher.uvx"
+exe = "uvx"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+flags_with_value = ["--with", "--package", "-p", "--python", "--from", "--extra", "--group", "--only-group", "--directory", "-C"]
+
+[[launcher]]
+id = "launcher.npm"
+exe = "npm"
+[launcher.match]
+argv1_in = ["exec", "run", "x"]
+min_argv = 3
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 2
+flags_with_value = ["--workspace", "-w"]
+[launcher.transform]
+strip_npm_scope = true
+
+[[launcher]]
+id = "launcher.npx"
+exe = "npx"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+[launcher.transform]
+strip_npm_scope = true
+
+[[launcher]]
+id = "launcher.java"
+exe = "java"
+[[launcher.step]]
+kind = "next_after_flag"
+flag = "-jar"
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 1
+flags_with_value = ["-cp", "-classpath", "--class-path", "-p", "--module-path", "--add-modules", "--module", "-m", "--add-opens", "--add-exports", "--add-reads", "-javaagent"]
+[launcher.transform]
+java_class_tail = true
+
+[[launcher]]
+id = "launcher.go.run"
+exe = "go"
+[launcher.match]
+argv1_in = ["run"]
+min_argv = 3
+[[launcher.step]]
+kind = "first_non_flag"
+start_index = 2

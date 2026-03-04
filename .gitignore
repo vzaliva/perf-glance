@@ -201,6 +201,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
+# Local regression fixture (machine-specific, may contain sensitive process cmdlines)
+tests/fixtures/dump_groups_snapshot.json
+
 # Claude / Cursor local settings (editor-specific, not for the repo)
 .claude/
 

@@ -7,14 +7,11 @@ import pwd
 import re
 from dataclasses import dataclass, field
 
-from perf_glance.grouping.patterns import (
-    APP_PATTERNS,
-    SYSTEM_CATEGORIES,
-    TOOL_PATTERNS,
-)
+from perf_glance.grouping.patterns import AppPattern, ToolPattern
+from perf_glance.grouping.rules_loader import LauncherRule, SystemCategory, load_grouping_rules_cached
 
 # Type for ProcessInfo-like objects (from collectors.processes)
-from typing import Any, Callable
+from typing import Any
 
 ProcLike = Any
 
@@ -53,215 +50,25 @@ def _uid_to_user(uid: int) -> str:
         return str(uid)
 
 
-def _skip_flags(parts: list[str], start: int, flags_with_value: frozenset[str] = frozenset()) -> int:
+def _skip_flags(
+    parts: list[str],
+    start: int,
+    flags_with_value: set[str],
+    stop_at_double_dash: bool = True,
+) -> int:
     """Return index of first non-flag argument at or after start."""
     i = start
     while i < len(parts):
         arg = parts[i]
-        if arg == "--":
+        if stop_at_double_dash and arg == "--":
             return i + 1
         if not arg.startswith("-"):
             return i
-        i += 1
         base = arg.split("=")[0]
+        i += 1
         if base in flags_with_value and "=" not in arg:
             i += 1  # skip value token
     return i
-
-
-def _resolve_as_script(parts: list[str]) -> str | None:
-    """Runtime that runs a script: [exe] [-flags] script [args].
-    Handles `python -m module` and skips `-c` (inline code, no meaningful name)."""
-    i = 1
-    while i < len(parts):
-        arg = parts[i]
-        if arg == "-m" and i + 1 < len(parts):
-            return parts[i + 1]
-        if arg == "-c":
-            return None
-        if arg.startswith("-"):
-            i += 1
-            continue
-        return arg
-    return None
-
-
-_UV_FLAGS_WITH_VALUE: frozenset[str] = frozenset({
-    "--with", "--package", "-p", "--python", "--from",
-    "--extra", "--group", "--only-group", "--directory", "-C",
-})
-
-
-def _resolve_uv(parts: list[str]) -> str | None:
-    """uv run / uv tool run / uv tool uvx — resolve the actual command being run."""
-    if len(parts) < 3:
-        return None
-    sub = parts[1]
-    if sub == "run":
-        i = _skip_flags(parts, 2, _UV_FLAGS_WITH_VALUE)
-        return parts[i] if i < len(parts) else None
-    if sub == "tool" and len(parts) >= 4 and parts[2] in ("run", "uvx"):
-        i = _skip_flags(parts, 3, _UV_FLAGS_WITH_VALUE)
-        return parts[i] if i < len(parts) else None
-    return None
-
-
-def _resolve_uvx(parts: list[str]) -> str | None:
-    """uvx <cmd> [args] — standalone alias for `uv tool run`."""
-    i = _skip_flags(parts, 1, _UV_FLAGS_WITH_VALUE)
-    return parts[i] if i < len(parts) else None
-
-
-def _strip_npm_scope(pkg: str) -> str:
-    """Strip npm scope prefix: @scope/name → name."""
-    if pkg.startswith("@") and "/" in pkg:
-        return pkg.split("/", 1)[1]
-    return pkg
-
-
-_NPM_FLAGS_WITH_VALUE: frozenset[str] = frozenset({"--workspace", "-w"})
-
-
-def _resolve_npm(parts: list[str]) -> str | None:
-    """npm run/exec/x <pkg> [args] — resolve to the actual command."""
-    if len(parts) < 3:
-        return None
-    sub = parts[1]
-    if sub in ("exec", "run", "x"):
-        i = _skip_flags(parts, 2, _NPM_FLAGS_WITH_VALUE)
-        return _strip_npm_scope(parts[i]) if i < len(parts) else None
-    return None
-
-
-def _resolve_npx(parts: list[str]) -> str | None:
-    """npx <pkg> [args] — direct package runner."""
-    i = _skip_flags(parts, 1)
-    return _strip_npm_scope(parts[i]) if i < len(parts) else None
-
-
-def _resolve_go_run(parts: list[str]) -> str | None:
-    """go run [flags] <file/pkg> [args]"""
-    if len(parts) < 3 or parts[1] != "run":
-        return None
-    i = _skip_flags(parts, 2)
-    return parts[i] if i < len(parts) else None
-
-
-_JAVA_FLAGS_WITH_VALUE: frozenset[str] = frozenset({
-    "-cp", "-classpath", "--class-path", "-p", "--module-path",
-    "--add-modules", "--module", "-m", "--add-opens", "--add-exports",
-    "--add-reads", "-javaagent",
-})
-
-
-def _resolve_java(parts: list[str]) -> str | None:
-    """java [options] {-jar jarfile | MainClass} [args]"""
-    i = 1
-    while i < len(parts):
-        arg = parts[i]
-        if arg == "-jar" and i + 1 < len(parts):
-            return parts[i + 1]
-        if arg in _JAVA_FLAGS_WITH_VALUE:
-            i += 2
-            continue
-        if arg.startswith("-"):
-            i += 1
-            continue
-        # Fully-qualified class name → take last component
-        return arg.split(".")[-1] or arg
-    return None
-
-
-# Built-in launcher resolvers.  For each wrapper exe, a function that parses
-# the cmdline parts and returns the real program name (or None if not resolvable).
-_LAUNCHER_RESOLVERS: dict[str, Callable[[list[str]], str | None]] = {
-    # Python family
-    "python":     _resolve_as_script,
-    "python2":    _resolve_as_script,
-    "python3":    _resolve_as_script,
-    "python3.9":  _resolve_as_script,
-    "python3.10": _resolve_as_script,
-    "python3.11": _resolve_as_script,
-    "python3.12": _resolve_as_script,
-    "python3.13": _resolve_as_script,
-    # Shells (also in generic_parents — both apply)
-    "bash":  _resolve_as_script,
-    "sh":    _resolve_as_script,
-    "dash":  _resolve_as_script,
-    "zsh":   _resolve_as_script,
-    "fish":  _resolve_as_script,
-    # Other runtimes
-    "node":  _resolve_as_script,
-    "ruby":  _resolve_as_script,
-    "perl":  _resolve_as_script,
-    # Package/task runners
-    "uv":    _resolve_uv,
-    "uvx":   _resolve_uvx,
-    "npm":   _resolve_npm,
-    "npx":   _resolve_npx,
-    # JVM
-    "java":  _resolve_java,
-    # Go
-    "go":    _resolve_go_run,
-}
-
-
-# Generic entry-point basenames that are not meaningful as process names.
-# When a launcher resolves to one of these, use the parent directory name.
-_GENERIC_ENTRYPOINTS: frozenset[str] = frozenset({
-    "index.js", "index.ts", "index.mjs", "index.cjs",
-    "main.js", "main.ts", "main.py", "__main__.py",
-    "cli.js", "cli.ts", "start.js", "run.js", "app.js",
-})
-
-
-def _effective_exe(proc: ProcLike, transparent_runtimes: set[str]) -> str:
-    """Get effective exe: resolve launcher wrappers to the actual program being run.
-
-    Checks built-in _LAUNCHER_RESOLVERS first (handles -m, subcommands, flags),
-    then falls back to transparent_runtimes (user-configured, simple argv[1] lookup).
-    """
-    exe = (getattr(proc, "exe", None) or getattr(proc, "name", None) or "").strip()
-    if not exe or "/" in exe:
-        exe = exe.split("/")[-1] if exe else ""
-    exe_lower = exe.lower()
-
-    resolver = _LAUNCHER_RESOLVERS.get(exe_lower)
-    if resolver is None and exe_lower in transparent_runtimes:
-        resolver = _resolve_as_script
-
-    if resolver:
-        cmdline = getattr(proc, "cmdline", None) or ""
-        if cmdline:
-            parts = cmdline.split()
-            if len(parts) >= 2:
-                # Secondary dispatch: when the runtime (e.g. node) launched a
-                # different known tool as argv[0] (e.g. npm, npx), defer to
-                # that tool's resolver instead.  This handles cases like:
-                #   exe=node  cmdline="npm exec @upstash/context7-mcp"
-                # where _resolve_as_script would return "exec" but
-                # _resolve_npm correctly returns "context7-mcp".
-                argv0_base = parts[0].split("/")[-1].lower().rstrip(":,;")
-                if argv0_base != exe_lower:
-                    secondary = _LAUNCHER_RESOLVERS.get(argv0_base)
-                    if secondary is not None:
-                        resolver = secondary
-                result = resolver(parts)
-                if result:
-                    # If the resolved name is a generic entry point (index.js,
-                    # main.py, etc.), use the parent directory name instead so
-                    # e.g. "node /path/lean-lsp-mcp/dist/index.js" → "lean-lsp-mcp".
-                    base = result.split("/")[-1].lower().rstrip(":,;") if "/" in result else result.lower().rstrip(":,;")
-                    if base in _GENERIC_ENTRYPOINTS and "/" in result:
-                        parts_path = result.split("/")
-                        # Walk back to find first non-generic directory component
-                        for part in reversed(parts_path[:-1]):
-                            if part and part not in ("dist", "build", "lib", "src", "out", "bin"):
-                                base = part.lower().rstrip(":,;")
-                                break
-                    cleaned = base or exe_lower
-                    return cleaned
-    return exe_lower
 
 
 def _normalize_exe(exe: str) -> str:
@@ -269,6 +76,183 @@ def _normalize_exe(exe: str) -> str:
     if not exe:
         return ""
     return exe.lower().split("/")[-1].rstrip(":,;")
+
+
+def _strip_npm_scope(pkg: str) -> str:
+    """Strip npm scope prefix: @scope/name -> name."""
+    if pkg.startswith("@") and "/" in pkg:
+        return pkg.split("/", 1)[1]
+    return pkg
+
+
+_GENERIC_ENTRYPOINTS: frozenset[str] = frozenset({
+    "index.js", "index.ts", "index.mjs", "index.cjs",
+    "main.js", "main.ts", "main.py", "__main__.py",
+    "cli.js", "cli.ts", "start.js", "run.js", "app.js",
+})
+
+_IGNORED_PARENT_DIRS: frozenset[str] = frozenset({"dist", "build", "lib", "src", "out", "bin"})
+
+
+def _launcher_match(parts: list[str], rule: LauncherRule) -> bool:
+    """Check whether command line matches launcher rule constraints."""
+    match = rule.match
+    if match.min_argv > 0 and len(parts) < match.min_argv:
+        return False
+    if match.argv1_in:
+        if len(parts) < 2 or parts[1] not in set(match.argv1_in):
+            return False
+    if match.argv_prefix:
+        prefix = list(match.argv_prefix)
+        if parts[1:1 + len(prefix)] != prefix:
+            return False
+    return True
+
+
+def _extract_from_step(parts: list[str], rule: LauncherRule, step) -> str | None:
+    """Run one launcher extraction step."""
+    flags_with_value = set(step.flags_with_value)
+
+    if step.kind == "next_after_flag":
+        if not step.flag:
+            return None
+        for i, arg in enumerate(parts[1:], start=1):
+            if arg == step.flag and i + 1 < len(parts):
+                return parts[i + 1]
+        return None
+
+    if step.kind == "argv_at":
+        idx = step.index if step.index >= 0 else step.start_index
+        return parts[idx] if 0 <= idx < len(parts) else None
+
+    if step.kind == "first_non_flag_after_prefix":
+        if rule.match.argv_prefix:
+            start = 1 + len(rule.match.argv_prefix)
+        else:
+            start = step.start_index
+        i = _skip_flags(parts, start, flags_with_value, stop_at_double_dash=step.stop_at_double_dash)
+        return parts[i] if i < len(parts) else None
+
+    if step.kind == "first_non_flag":
+        i = step.start_index
+        abort_flags = set(step.abort_flags)
+        while i < len(parts):
+            arg = parts[i]
+            if step.stop_at_double_dash and arg == "--":
+                i += 1
+                break
+            if arg in abort_flags:
+                return None
+            if step.module_flag and arg == step.module_flag:
+                return parts[i + 1] if i + 1 < len(parts) else None
+            if not arg.startswith("-"):
+                return arg
+            base = arg.split("=")[0]
+            i += 1
+            if base in flags_with_value and "=" not in arg:
+                i += 1
+        return parts[i] if i < len(parts) else None
+
+    return None
+
+
+def _apply_transform(value: str, rule: LauncherRule) -> str:
+    """Apply launcher output transform steps."""
+    transformed = value
+    t = rule.transform
+
+    if t.strip_npm_scope:
+        transformed = _strip_npm_scope(transformed)
+
+    if t.java_class_tail:
+        transformed = transformed.split(".")[-1] if "." in transformed else transformed
+
+    if t.generic_entrypoint_fallback and "/" in transformed:
+        base = _normalize_exe(transformed.split("/")[-1])
+        if base in _GENERIC_ENTRYPOINTS:
+            parts_path = [p for p in transformed.split("/") if p]
+            for part in reversed(parts_path[:-1]):
+                cleaned = _normalize_exe(part)
+                if cleaned and cleaned not in _IGNORED_PARENT_DIRS:
+                    transformed = cleaned
+                    break
+
+    if t.basename:
+        transformed = transformed.split("/")[-1]
+    if t.strip_trailing_punct:
+        transformed = transformed.rstrip(":,;")
+    if t.lowercase:
+        transformed = transformed.lower()
+
+    return transformed
+
+
+def _resolve_via_launcher_rules(parts: list[str], rules: list[LauncherRule]) -> str | None:
+    """Evaluate launcher rules for argv and return effective executable."""
+    for rule in rules:
+        if not _launcher_match(parts, rule):
+            continue
+        for step in rule.steps:
+            extracted = _extract_from_step(parts, rule, step)
+            if not extracted:
+                continue
+            transformed = _apply_transform(extracted, rule)
+            normalized = _normalize_exe(transformed)
+            if normalized:
+                return normalized
+    return None
+
+
+def _resolve_as_script_fallback(parts: list[str]) -> str | None:
+    """Fallback for transparent runtimes without explicit launcher rules."""
+    i = 1
+    while i < len(parts):
+        arg = parts[i]
+        if arg == "-m" and i + 1 < len(parts):
+            return _normalize_exe(parts[i + 1])
+        if arg == "-c":
+            return None
+        if arg.startswith("-"):
+            i += 1
+            continue
+        return _normalize_exe(arg)
+    return None
+
+
+def _effective_exe(
+    proc: ProcLike,
+    transparent_runtimes: set[str],
+    launchers_by_exe: dict[str, list[LauncherRule]],
+) -> str:
+    """Get effective exe by applying declarative launcher rules."""
+    exe = (getattr(proc, "exe", None) or getattr(proc, "name", None) or "").strip()
+    exe_lower = _normalize_exe(exe)
+    if not exe_lower:
+        return ""
+
+    cmdline = getattr(proc, "cmdline", None) or ""
+    parts = cmdline.split() if cmdline else []
+    if len(parts) < 2:
+        return exe_lower
+
+    argv0_base = _normalize_exe(parts[0])
+    candidate_exes: list[str] = []
+    if argv0_base and argv0_base != exe_lower and argv0_base in launchers_by_exe:
+        candidate_exes.append(argv0_base)
+    if exe_lower in launchers_by_exe:
+        candidate_exes.append(exe_lower)
+
+    for candidate in candidate_exes:
+        resolved = _resolve_via_launcher_rules(parts, launchers_by_exe.get(candidate, []))
+        if resolved:
+            return resolved
+
+    if exe_lower in transparent_runtimes:
+        fallback = _resolve_as_script_fallback(parts)
+        if fallback:
+            return fallback
+
+    return exe_lower
 
 
 _VERSION_SUFFIX_RE = re.compile(r"[-_.]\d+(\.\d+)*$")
@@ -282,10 +266,10 @@ def _strip_version_suffix(exe: str) -> str:
 def _match_app(
     effective: str,
     cmdline: str,
-    app_patterns: list,
+    app_patterns: list[AppPattern],
     exe_to_app: dict[str, str],
     desktop_excluded: frozenset[str] = frozenset(),
-) -> tuple[str, object] | None:
+) -> tuple[str, AppPattern | None] | None:
     """Match process against app patterns. Returns (display_name, pattern) or None.
 
     desktop_excluded: exe names that should NOT match via exe_to_app (system/generic processes).
@@ -293,15 +277,14 @@ def _match_app(
     effective_lower = effective.lower()
     effective_base = _strip_version_suffix(effective_lower)
     cmdline_lower = (cmdline or "").lower()
-    # Priority: config apps, built-in APP_PATTERNS, desktop exe_to_app
     for pattern in app_patterns:
-        exe = getattr(pattern, "exe", "").lower()
+        exe = pattern.exe.lower()
         if effective_lower != exe and effective_base != exe:
             continue
-        cmdline_pat = getattr(pattern, "cmdline", "") or ""
+        cmdline_pat = pattern.cmdline or ""
         if cmdline_pat and cmdline_pat.lower() not in cmdline_lower:
             continue
-        return (getattr(pattern, "name", exe), pattern)
+        return (pattern.name, pattern)
     if effective_lower not in desktop_excluded:
         key = effective_lower if effective_lower in exe_to_app else effective_base
         if key in exe_to_app:
@@ -309,19 +292,20 @@ def _match_app(
     return None
 
 
-def _match_tool(effective: str, tool_patterns: list) -> tuple[str, str] | None:
+def _match_tool(effective: str, tool_patterns: list[ToolPattern]) -> tuple[str, str] | None:
     """Match process against tool patterns. Returns (display_name, category) or None."""
     effective_lower = effective.lower()
     for pattern in tool_patterns:
-        exe = getattr(pattern, "exe", "").lower()
+        exe = pattern.exe.lower()
         if effective_lower == exe:
-            return (getattr(pattern, "name", exe), getattr(pattern, "category", "") or "compiler")
+            return (pattern.name, pattern.category or "compiler")
     return None
 
 
 def _match_system_category(
     proc: ProcLike,
     effective: str,
+    system_categories: list[SystemCategory],
     category_overrides: dict[str, str],
 ) -> str | None:
     """Match process against system categories. Returns category name or None."""
@@ -332,21 +316,12 @@ def _match_system_category(
         return None
     if overridden:
         return overridden
-    for cat_name, cat_def in SYSTEM_CATEGORIES.items():
-        if "match" in cat_def:
-            fn = cat_def["match"]
-            if callable(fn) and fn(proc):
-                return cat_name
-            continue
-        exe_list_raw = cat_def.get("exe", [])
-        exe_prefix_raw = cat_def.get("exe_prefix", [])
-        exe_list = [e.lower() for e in (exe_list_raw if isinstance(exe_list_raw, list) else [])]
-        exe_prefix = [p.lower() for p in (exe_prefix_raw if isinstance(exe_prefix_raw, list) else [])]
-        if effective_lower in exe_list:
-            return cat_name
-        for prefix in exe_prefix:
+    for category in system_categories:
+        if effective_lower in category.exe:
+            return category.name
+        for prefix in category.exe_prefix:
             if effective_lower.startswith(prefix):
-                return cat_name
+                return category.name
     return None
 
 
@@ -355,19 +330,12 @@ def _ancestor_matches_app(
     ppid_map: dict[int, int],
     pid_to_proc: dict[int, Any],
     effective_exe_map: dict[int, str],
-    app_patterns: list,
+    app_patterns: list[AppPattern],
     exe_to_app: dict[str, str],
-    generic_set: set[str],
     terminal_exes: set[str],
     desktop_excluded: frozenset[str] = frozenset(),
-) -> tuple[str, object] | None:
-    """Walk up from PARENT; return (app_name, pattern) if any ancestor matches app.
-
-    Starting from the parent (not the process itself) ensures that when a process
-    directly matches an app pattern (e.g. codex), its own parent chain is checked
-    first — so a Cursor-extension codex is attributed to Cursor, not Codex.
-    A terminal exe in the chain cuts off the walk (returns None).
-    """
+) -> tuple[str, AppPattern | None] | None:
+    """Walk up from PARENT; return (app_name, pattern) if any ancestor matches app."""
     start = ppid_map.get(pid)
     if not start or start == pid or start not in ppid_map:
         return None
@@ -451,31 +419,51 @@ def group_processes(
     """Group processes by four-layer algorithm: apps, tools, system, catch-all."""
     from perf_glance.collectors.processes import ProcessInfo
 
+    defaults = load_grouping_rules_cached()
     if exe_to_app is None:
         exe_to_app = {}
-    generic_parents = getattr(config, "generic_parents", []) or []
-    generic_set = {p.lower() for p in generic_parents}
-    tr = getattr(config, "transparent_runtimes", None) or []
-    transparent_runtimes = {str(r).lower() for r in (tr if isinstance(tr, list) else [])}
 
-    app_patterns = list(getattr(config, "apps", []) or [])
-    if not app_patterns:
-        app_patterns = list(APP_PATTERNS)
+    generic_parents_raw = getattr(config, "generic_parents", None)
+    if isinstance(generic_parents_raw, list) and generic_parents_raw:
+        generic_parents = [str(p).lower() for p in generic_parents_raw]
     else:
-        builtin_exes = {p.exe.lower() for p in APP_PATTERNS}
-        for p in APP_PATTERNS:
-            if p.exe.lower() not in {a.exe.lower() for a in app_patterns}:
-                app_patterns.append(p)
+        generic_parents = list(defaults.generic_parents)
+    generic_set = set(generic_parents)
 
-    tool_patterns = list(getattr(config, "tools", []) or [])
-    if not tool_patterns:
-        tool_patterns = list(TOOL_PATTERNS)
+    transparent_runtimes_raw = getattr(config, "transparent_runtimes", None)
+    if isinstance(transparent_runtimes_raw, list) and transparent_runtimes_raw:
+        transparent_runtimes = {str(r).lower() for r in transparent_runtimes_raw}
     else:
-        for p in TOOL_PATTERNS:
-            if p.exe.lower() not in {t.exe.lower() for t in tool_patterns}:
-                tool_patterns.append(p)
+        transparent_runtimes = set(defaults.transparent_runtimes)
 
-    category_overrides = getattr(config, "category_overrides", {}) or {}
+    app_patterns_raw = getattr(config, "apps", None)
+    app_patterns = list(app_patterns_raw) if isinstance(app_patterns_raw, list) and app_patterns_raw else list(defaults.apps)
+
+    tool_patterns_raw = getattr(config, "tools", None)
+    tool_patterns = list(tool_patterns_raw) if isinstance(tool_patterns_raw, list) and tool_patterns_raw else list(defaults.tools)
+
+    system_categories_raw = getattr(config, "system_categories", None)
+    if isinstance(system_categories_raw, list) and system_categories_raw:
+        system_categories = list(system_categories_raw)
+    else:
+        system_categories = list(defaults.system_categories)
+
+    category_overrides_raw = getattr(config, "category_overrides", None)
+    if isinstance(category_overrides_raw, dict):
+        category_overrides = {str(k).lower(): str(v) for k, v in category_overrides_raw.items()}
+    else:
+        category_overrides = dict(defaults.category_overrides)
+
+    launchers_by_exe_raw = getattr(config, "launchers_by_exe", None)
+    if isinstance(launchers_by_exe_raw, dict) and launchers_by_exe_raw:
+        launchers_by_exe = {
+            str(exe).lower(): list(rules)
+            for exe, rules in launchers_by_exe_raw.items()
+            if isinstance(rules, list)
+        }
+    else:
+        launchers_by_exe = {k: list(v) for k, v in defaults.launchers_by_exe.items()}
+
     other_cpu_max = getattr(config, "other_cpu_max", 0.1) or 0.1
     other_mem_max = getattr(config, "other_mem_max", 30 << 20) or 30 << 20
 
@@ -486,7 +474,7 @@ def group_processes(
         name_map[p.pid] = (p.exe or p.name or "").lower()
     effective_exe_map: dict[int, str] = {}
     for p in processes:
-        effective_exe_map[p.pid] = _effective_exe(p, transparent_runtimes)
+        effective_exe_map[p.pid] = _effective_exe(p, transparent_runtimes, launchers_by_exe)
 
     terminal_exes = {
         "wezterm-gui", "alacritty", "kitty", "gnome-terminal",
@@ -496,9 +484,9 @@ def group_processes(
     # Build set of all exe names claimed by system categories so Layer 1
     # .desktop fallback doesn't steal them (e.g. picom, i3, nm-applet).
     system_exes: set[str] = set()
-    for cat_def in SYSTEM_CATEGORIES.values():
-        for e in cat_def.get("exe", []):  # type: ignore[union-attr]
-            system_exes.add(e.lower())
+    for category in system_categories:
+        for exe in category.exe:
+            system_exes.add(exe)
     desktop_excluded: frozenset[str] = frozenset(system_exes | generic_set)
 
     # pid -> (layer, group_key)  group_key is "name:uid" or category name
@@ -510,16 +498,12 @@ def group_processes(
     def is_assigned(pid: int) -> bool:
         return pid in pid_to_assignment
 
-    # Pids assigned to AI host apps — Layer 2 must not reclaim these as tool
-    # groups, so that compilers/builds spawned by agent UIs stay attributed to
-    # the host app.
+    # Pids assigned to no-tool-reclaim apps (agent apps, etc.)
     no_tool_reclaim_pids: set[int] = set()
-    ai_host_app_names = {"claude", "codex", "cursor", "cursor agent"}
 
-    def _assign_app(pid: int, app_name: str, uid: int, pattern: object) -> None:
+    def _assign_app(pid: int, app_name: str, uid: int, pattern: AppPattern | None) -> None:
         assign(pid, "app", f"{app_name}:{uid}")
-        family = str(getattr(pattern, "family", "") or "").lower()
-        if family == "agent" or app_name.lower() in ai_host_app_names:
+        if pattern and (pattern.family == "agent" or pattern.no_tool_reclaim):
             no_tool_reclaim_pids.add(pid)
 
     # Layer 1: Application recognition
@@ -539,14 +523,9 @@ def group_processes(
         if exe in generic_set:
             continue
 
-        # Ancestor check FIRST: if this process lives inside a known app's
-        # subtree (walking up, stopping at terminal boundaries), attribute it
-        # to that ancestor app.  This ensures e.g. a Cursor-extension "codex"
-        # binary is kept under Cursor rather than stolen by an AppPattern for
-        # the standalone Codex CLI.
         ancestor_match = _ancestor_matches_app(
             pid, ppid_map, pid_to_proc, effective_exe_map,
-            app_patterns, exe_to_app, generic_set, terminal_exes,
+            app_patterns, exe_to_app, terminal_exes,
             desktop_excluded,
         )
         if ancestor_match:
@@ -559,23 +538,23 @@ def group_processes(
         if match:
             app_name, pattern = match
             if pattern:
-                family = getattr(pattern, "family", "") or ""
+                family = pattern.family or ""
                 if family in ("electron", "chromium"):
-                    if _is_electron_child(proc, getattr(pattern, "exe", "").lower()):
+                    if _is_electron_child(proc, pattern.exe.lower()):
                         _assign_app(pid, app_name, uid, pattern)
                         continue
                     root_exe = effective_exe_map.get(pid, exe)
-                    if root_exe == getattr(pattern, "exe", "").lower():
+                    if root_exe == pattern.exe.lower():
                         _assign_app(pid, app_name, uid, pattern)
                         continue
                 elif family == "gecko":
-                    if _is_gecko_child(proc, getattr(pattern, "exe", "").lower()):
+                    if _is_gecko_child(proc, pattern.exe.lower()):
                         _assign_app(pid, app_name, uid, pattern)
                         continue
-                    if exe == getattr(pattern, "exe", "").lower():
+                    if exe == pattern.exe.lower():
                         _assign_app(pid, app_name, uid, pattern)
                         continue
-            _assign_app(pid, app_name, uid, pattern or object())
+            _assign_app(pid, app_name, uid, pattern)
             continue
 
         root = _get_tree_root(pid, ppid_map, name_map, generic_set)
@@ -587,16 +566,16 @@ def group_processes(
                 app_patterns, exe_to_app, desktop_excluded,
             )
             if root_match and root_match[0] and root_match[0] not in terminal_exes:
-                _assign_app(pid, root_match[0], uid, root_match[1] or object())
+                _assign_app(pid, root_match[0], uid, root_match[1])
                 continue
 
         if exe in terminal_exes:
             match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
             if match:
-                _assign_app(pid, match[0], uid, match[1] or object())
+                _assign_app(pid, match[0], uid, match[1])
                 continue
 
-    # Layer 2: Tool grouping (reclaims from Layer 1, but not AI-host app children)
+    # Layer 2: Tool grouping (reclaims from Layer 1, but not no-tool-reclaim app children)
     for proc in processes:
         pid = proc.pid
         if pid in no_tool_reclaim_pids:
@@ -619,7 +598,7 @@ def group_processes(
             assign(proc.pid, "system", "Kernel")
             continue
         exe = effective_exe_map[proc.pid]
-        cat = _match_system_category(proc, exe, category_overrides)
+        cat = _match_system_category(proc, exe, system_categories, category_overrides)
         if cat:
             # Use uid in key only for current user; all other system accounts
             # share the same group per category.
@@ -760,18 +739,39 @@ def _build_hierarchy(
     config: object,
 ) -> list[ProcessGroup]:
     """Build children sub-groups for apps, tools, and system categories."""
+    defaults = load_grouping_rules_cached()
     default_expanded = {
         str(x).lower()
         for x in (getattr(config, "default_expanded", None) or [])
     }
     expand_threshold = getattr(config, "expand_threshold", 0) or 0
-    tr = getattr(config, "transparent_runtimes", None) or []
-    transparent_runtimes: set[str] = {str(r).lower() for r in (tr if isinstance(tr, list) else [])}
+
+    transparent_runtimes_raw = getattr(config, "transparent_runtimes", None)
+    if isinstance(transparent_runtimes_raw, list) and transparent_runtimes_raw:
+        transparent_runtimes: set[str] = {str(r).lower() for r in transparent_runtimes_raw}
+    else:
+        transparent_runtimes = set(defaults.transparent_runtimes)
+
+    launchers_by_exe_raw = getattr(config, "launchers_by_exe", None)
+    if isinstance(launchers_by_exe_raw, dict) and launchers_by_exe_raw:
+        launchers_by_exe = {
+            str(exe).lower(): list(rules)
+            for exe, rules in launchers_by_exe_raw.items()
+            if isinstance(rules, list)
+        }
+    else:
+        launchers_by_exe = {k: list(v) for k, v in defaults.launchers_by_exe.items()}
+
+    app_patterns_raw = getattr(config, "apps", None)
+    if isinstance(app_patterns_raw, list) and app_patterns_raw:
+        app_patterns = list(app_patterns_raw)
+    else:
+        app_patterns = list(defaults.apps)
 
     # Agent-family app names (TUI AI agents whose children should be labeled
     # by effective exe, not by Electron process type).
     agent_app_names = {
-        p.name.lower() for p in APP_PATTERNS if getattr(p, "family", "") == "agent"
+        p.name.lower() for p in app_patterns if getattr(p, "family", "") == "agent"
     }
 
     result: list[ProcessGroup] = []
@@ -792,7 +792,7 @@ def _build_hierarchy(
                 # TUI agents: label children by the actual command they run
                 children = _build_subgroups(
                     procs,
-                    lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
+                    lambda p, tr=transparent_runtimes, lr=launchers_by_exe: _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown"),
                     g.group_key,
                     g.user, "app", ram_total_bytes,
                 )
@@ -815,7 +815,7 @@ def _build_hierarchy(
         elif g.category == "system" and len(procs) > 1 and g.name != "Kernel":
             children = _build_subgroups(
                 procs,
-                lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
+                lambda p, tr=transparent_runtimes, lr=launchers_by_exe: _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown"),
                 g.group_key,
                 g.user, "system", ram_total_bytes,
             )

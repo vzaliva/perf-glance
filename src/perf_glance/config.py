@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from perf_glance.grouping.patterns import AppPattern, ToolPattern
+from perf_glance.grouping.rules_loader import LauncherRule, SystemCategory, load_grouping_rules_cached
 
 
 DEFAULT_CONFIG_TOML = '''# perf-glance configuration
@@ -24,14 +25,10 @@ show_cpu_temp = true
 
 [grouping]
 desktop_dirs = ["/usr/share/applications", "/usr/local/share/applications", "~/.local/share/applications", "/var/lib/snapd/desktop/applications", "/var/lib/flatpak/exports/share/applications", "~/.local/share/flatpak/exports/share/applications"]
-generic_parents = ["systemd", "init", "kthreadd", "bash", "dash", "sh", "zsh", "fish", "sudo", "su", "login", "sshd", "tmux", "screen", "env", "start-stop-daemon"]
-transparent_runtimes = ["python", "python3", "python3.11", "python3.12", "python3.13", "node", "ruby", "perl"]
 other_cpu_max = 0.1
 other_mem_max = "30M"
 default_expanded = []
 expand_threshold = 0
-# Legacy: force_name_group -> tools when no [[grouping.tools]] (migration)
-force_name_group = ["cc1", "g++", "gcc", "rustc", "clang", "clang++", "as", "ld", "lean", "lake"]
 
 [theme]
 cpu_low    = "#00e676"
@@ -152,33 +149,23 @@ DEFAULT_DESKTOP_DIRS = [
     "~/.local/share/flatpak/exports/share/applications",
 ]
 
-DEFAULT_GENERIC_PARENTS = [
-    "systemd", "init", "kthreadd", "bash", "dash", "sh", "zsh", "fish",
-    "sudo", "su", "login", "sshd", "tmux", "screen", "env", "start-stop-daemon",
-]
-
-DEFAULT_TRANSPARENT_RUNTIMES = [
-    "python", "python3", "python3.11", "python3.12", "python3.13",
-    "node", "ruby", "perl",
-]
-
 
 @dataclass
 class GroupingConfig:
     """Process grouping configuration."""
 
     desktop_dirs: list[str] = field(default_factory=lambda: list(DEFAULT_DESKTOP_DIRS))
-    generic_parents: list[str] = field(default_factory=lambda: list(DEFAULT_GENERIC_PARENTS))
-    transparent_runtimes: list[str] = field(default_factory=lambda: list(DEFAULT_TRANSPARENT_RUNTIMES))
+    generic_parents: list[str] = field(default_factory=list)
+    transparent_runtimes: list[str] = field(default_factory=list)
     apps: list[AppPattern] = field(default_factory=list)
     tools: list[ToolPattern] = field(default_factory=list)
+    system_categories: list[SystemCategory] = field(default_factory=list)
     category_overrides: dict[str, str] = field(default_factory=dict)
+    launchers_by_exe: dict[str, list[LauncherRule]] = field(default_factory=dict)
     other_cpu_max: float = 0.1
     other_mem_max: int = field(default_factory=lambda: 30 << 20)
     default_expanded: list[str] = field(default_factory=list)
     expand_threshold: int = 0
-    # Legacy: used for migration when no explicit tools
-    force_name_group: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -208,27 +195,37 @@ class Config:
     theme: ThemeConfig = field(default_factory=ThemeConfig)
 
 
+_LEGACY_GROUPING_RULE_KEYS = {
+    "apps",
+    "tools",
+    "category_overrides",
+    "generic_parents",
+    "transparent_runtimes",
+    "force_name_group",
+}
+
+
 def _parse_grouping(raw: dict[str, Any]) -> GroupingConfig:
     """Parse grouping section from config."""
     grouping_raw = raw.get("grouping", {})
     if not isinstance(grouping_raw, dict):
         grouping_raw = {}
 
+    legacy_present = sorted(k for k in grouping_raw.keys() if k in _LEGACY_GROUPING_RULE_KEYS)
+    if legacy_present:
+        key_list = ", ".join(legacy_present)
+        raise ValueError(
+            "config.toml uses legacy [grouping] rule keys that are no longer supported: "
+            f"{key_list}. Migrate to rules.d files as documented in docs/rules.md."
+        )
+
     desktop_dirs = _get_list(raw, "grouping", "desktop_dirs")
     if not desktop_dirs:
         desktop_dirs = list(DEFAULT_DESKTOP_DIRS)
 
-    generic_parents = _get_list(raw, "grouping", "generic_parents")
-    if not generic_parents:
-        generic_parents = list(DEFAULT_GENERIC_PARENTS)
-
-    transparent_runtimes = _get_list(raw, "grouping", "transparent_runtimes")
-    if not transparent_runtimes:
-        transparent_runtimes = list(DEFAULT_TRANSPARENT_RUNTIMES)
-
-    other_cpu_max = grouping_raw.get("other_cpu_max", 0.1)
+    other_cpu_max_raw = grouping_raw.get("other_cpu_max", 0.1)
     try:
-        other_cpu_max = float(other_cpu_max)
+        other_cpu_max = float(other_cpu_max_raw)
     except (TypeError, ValueError):
         other_cpu_max = 0.1
 
@@ -238,69 +235,21 @@ def _parse_grouping(raw: dict[str, Any]) -> GroupingConfig:
     default_expanded = _get_list(raw, "grouping", "default_expanded")
     expand_threshold = _get_int(raw, "grouping", "expand_threshold", default=0)
 
-    # Parse [[grouping.apps]]
-    apps: list[AppPattern] = []
-    for entry in grouping_raw.get("apps", []) or []:
-        if isinstance(entry, dict) and entry.get("exe") and entry.get("name"):
-            apps.append(AppPattern(
-                exe=str(entry["exe"]).strip(),
-                name=str(entry["name"]).strip(),
-                family=str(entry.get("family", "")).strip(),
-                cmdline=str(entry.get("cmdline", "")).strip(),
-            ))
-
-    # Parse [[grouping.tools]]
-    tools: list[ToolPattern] = []
-    tools_raw = grouping_raw.get("tools", []) or []
-    force_name_group = _get_list(raw, "grouping", "force_name_group")
-    if tools_raw:
-        for entry in tools_raw:
-            if isinstance(entry, dict) and entry.get("exe") and entry.get("name"):
-                tools.append(ToolPattern(
-                    exe=str(entry["exe"]).strip(),
-                    name=str(entry["name"]).strip(),
-                    category=str(entry.get("category", "")).strip(),
-                ))
-    elif force_name_group:
-        # Migration: force_name_group -> tools with name=exe
-        for exe in force_name_group:
-            exe = exe.strip()
-            if exe:
-                tools.append(ToolPattern(exe=exe, name=exe.title()))
-    else:
-        # Default tool list
-        tools = [
-            ToolPattern(exe="cc1", name="GCC"),
-            ToolPattern(exe="g++", name="GCC"),
-            ToolPattern(exe="gcc", name="GCC"),
-            ToolPattern(exe="rustc", name="Rust"),
-            ToolPattern(exe="clang", name="Clang"),
-            ToolPattern(exe="clang++", name="Clang"),
-            ToolPattern(exe="as", name="Assembler"),
-            ToolPattern(exe="ld", name="Linker"),
-            ToolPattern(exe="lean", name="Lean"),
-            ToolPattern(exe="lake", name="Lake"),
-        ]
-
-    # Parse [grouping.category_overrides]
-    category_overrides: dict[str, str] = {}
-    overrides_raw = grouping_raw.get("category_overrides", {})
-    if isinstance(overrides_raw, dict):
-        for k, v in overrides_raw.items():
-            category_overrides[str(k).strip()] = str(v).strip()
+    rules = load_grouping_rules_cached()
 
     return GroupingConfig(
         desktop_dirs=desktop_dirs,
-        generic_parents=generic_parents,
-        transparent_runtimes=transparent_runtimes,
-        apps=apps,
-        tools=tools,
-        category_overrides=category_overrides,
+        generic_parents=list(rules.generic_parents),
+        transparent_runtimes=list(rules.transparent_runtimes),
+        apps=list(rules.apps),
+        tools=list(rules.tools),
+        system_categories=list(rules.system_categories),
+        category_overrides=dict(rules.category_overrides),
+        launchers_by_exe={k: list(v) for k, v in rules.launchers_by_exe.items()},
         other_cpu_max=other_cpu_max,
         other_mem_max=other_mem_max,
         default_expanded=default_expanded,
         expand_threshold=expand_threshold,
-        force_name_group=force_name_group,
     )
 
 

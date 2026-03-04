@@ -1,0 +1,31 @@
+schema_version = 1
+
+[list_patch]
+generic_parents_add = [
+  "systemd",
+  "init",
+  "kthreadd",
+  "bash",
+  "dash",
+  "sh",
+  "zsh",
+  "fish",
+  "sudo",
+  "su",
+  "login",
+  "sshd",
+  "tmux",
+  "screen",
+  "env",
+  "start-stop-daemon",
+]
+transparent_runtimes_add = [
+  "python",
+  "python3",
+  "python3.11",
+  "python3.12",
+  "python3.13",
+  "node",
+  "ruby",
+  "perl",
+]

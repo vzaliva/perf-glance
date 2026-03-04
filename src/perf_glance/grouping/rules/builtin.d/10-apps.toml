@@ -1,0 +1,207 @@
+schema_version = 1
+
+[[app]]
+id = "app.cursor"
+exe = "cursor"
+name = "Cursor"
+family = "electron"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.code"
+exe = "code"
+name = "VS Code"
+family = "electron"
+
+[[app]]
+id = "app.slack"
+exe = "slack"
+name = "Slack"
+family = "electron"
+
+[[app]]
+id = "app.discord"
+exe = "discord"
+name = "Discord"
+family = "electron"
+
+[[app]]
+id = "app.signal"
+exe = "signal-desktop"
+name = "Signal"
+family = "electron"
+
+[[app]]
+id = "app.teams"
+exe = "teams"
+name = "Teams"
+family = "electron"
+
+[[app]]
+id = "app.spotify"
+exe = "spotify"
+name = "Spotify"
+family = "electron"
+
+[[app]]
+id = "app.obsidian"
+exe = "obsidian"
+name = "Obsidian"
+family = "electron"
+
+[[app]]
+id = "app.claude"
+exe = "claude"
+name = "Claude"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.claude_code"
+exe = "claude-code"
+name = "Claude"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.codex"
+exe = "codex"
+name = "Codex"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.cursor_agent"
+exe = "cursor-agent"
+name = "Cursor Agent"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.firefox"
+exe = "firefox"
+name = "Firefox"
+family = "gecko"
+
+[[app]]
+id = "app.thunderbird"
+exe = "thunderbird"
+name = "Thunderbird"
+family = "gecko"
+
+[[app]]
+id = "app.librewolf"
+exe = "librewolf"
+name = "LibreWolf"
+family = "gecko"
+
+[[app]]
+id = "app.chrome"
+exe = "chrome"
+name = "Chrome"
+family = "chromium"
+
+[[app]]
+id = "app.chromium"
+exe = "chromium"
+name = "Chromium"
+family = "chromium"
+
+[[app]]
+id = "app.brave"
+exe = "brave"
+name = "Brave"
+family = "chromium"
+
+[[app]]
+id = "app.vivaldi"
+exe = "vivaldi"
+name = "Vivaldi"
+family = "chromium"
+
+[[app]]
+id = "app.opera"
+exe = "opera"
+name = "Opera"
+family = "chromium"
+
+[[app]]
+id = "app.emacs"
+exe = "emacs"
+name = "Emacs"
+
+[[app]]
+id = "app.gimp"
+exe = "gimp"
+name = "GIMP"
+
+[[app]]
+id = "app.blender"
+exe = "blender"
+name = "Blender"
+
+[[app]]
+id = "app.inkscape"
+exe = "inkscape"
+name = "Inkscape"
+
+[[app]]
+id = "app.libreoffice"
+exe = "libreoffice"
+name = "LibreOffice"
+
+[[app]]
+id = "app.vlc"
+exe = "vlc"
+name = "VLC"
+
+[[app]]
+id = "app.mpv"
+exe = "mpv"
+name = "mpv"
+
+[[app]]
+id = "app.steam"
+exe = "steam"
+name = "Steam"
+family = "electron"
+
+[[app]]
+id = "app.dropbox"
+exe = "dropbox"
+name = "Dropbox"
+
+[[app]]
+id = "app.protonvpn"
+exe = "protonvpn-app"
+name = "Proton VPN"
+
+[[app]]
+id = "app.wezterm"
+exe = "wezterm-gui"
+name = "WezTerm"
+
+[[app]]
+id = "app.alacritty"
+exe = "alacritty"
+name = "Alacritty"
+
+[[app]]
+id = "app.kitty"
+exe = "kitty"
+name = "Kitty"
+
+[[app]]
+id = "app.gnome_terminal"
+exe = "gnome-terminal"
+name = "GNOME Terminal"
+
+[[app]]
+id = "app.konsole"
+exe = "konsole"
+name = "Konsole"
+
+[[app]]
+id = "app.xterm"
+exe = "xterm"
+name = "xterm"

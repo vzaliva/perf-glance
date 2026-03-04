@@ -1,0 +1,146 @@
+schema_version = 1
+
+[[system_category]]
+id = "sys.display"
+name = "Display Server"
+exe = [
+  "Xorg",
+  "Xwayland",
+  "gdm-x-session",
+  "mutter",
+  "kwin",
+  "sway",
+  "hyprland",
+  "wlroots",
+  "gnome-shell",
+]
+
+[[system_category]]
+id = "sys.window_manager"
+name = "Window Manager"
+exe = [
+  "i3",
+  "i3bar",
+  "i3status",
+  "py3status",
+  "polybar",
+  "bspwm",
+  "openbox",
+  "picom",
+  "compton",
+  "dunst",
+  "waybar",
+  "rofi",
+  "dmenu",
+]
+
+[[system_category]]
+id = "sys.audio"
+name = "Audio"
+exe = [
+  "pipewire",
+  "pipewire-pulse",
+  "wireplumber",
+  "pulseaudio",
+  "alsa",
+  "speech-dispatcher",
+  "speech-dispatch",
+  "sd_espeak-ng",
+  "sd_dummy",
+  "sd_openjtalk",
+]
+
+[[system_category]]
+id = "sys.network"
+name = "Network"
+exe = [
+  "NetworkManager",
+  "networkmanager",
+  "wpa_supplicant",
+  "systemd-resolved",
+  "openvpn",
+  "proton.vpn.daemon",
+  "wireguard",
+  "dnsmasq",
+  "avahi-daemon",
+]
+
+[[system_category]]
+id = "sys.bluetooth"
+name = "Bluetooth"
+exe = [
+  "bluetoothd",
+  "blueman-applet",
+  "blueman-tray",
+  "blueman-manager",
+  "obexd",
+]
+
+[[system_category]]
+id = "sys.printing"
+name = "Printing"
+exe = ["cupsd", "cups-browsed", "cups-lpd"]
+
+[[system_category]]
+id = "sys.file_services"
+name = "File Services"
+exe = ["udisksd", "tracker-miner", "tracker-extract", "baloo"]
+exe_prefix = ["gvfsd", "gvfs-"]
+
+[[system_category]]
+id = "sys.security"
+name = "Security / Auth"
+exe = [
+  "polkitd",
+  "polkit-agent-helper-1",
+  "gnome-keyring-daemon",
+  "gpg-agent",
+  "ssh-agent",
+  "pam",
+  "at-spi-bus-launcher",
+  "at-spi2-registryd",
+  "xdg-permission-store",
+  "xdg-document-portal",
+]
+
+[[system_category]]
+id = "sys.session"
+name = "Session / Desktop"
+exe = [
+  "systemd",
+  "dbus-daemon",
+  "dconf-service",
+  "xdg-desktop-portal",
+  "xdg-desktop-portal-gtk",
+  "xdg-desktop-portal-gnome",
+  "snapd-desktop-integration",
+  "snap-handle-link",
+  "snap",
+  "goa-daemon",
+  "goa-identity-service",
+  "xss-lock",
+  "xautolock",
+  "flameshot",
+  "nm-applet",
+  "colord",
+  "gnome-remote-desktop-daemon",
+]
+
+[[system_category]]
+id = "sys.logging"
+name = "Logging / Monitoring"
+exe = ["rsyslogd", "systemd-journald", "kerneloops", "abrtd"]
+
+[[system_category]]
+id = "sys.virtualization"
+name = "Virtualization"
+exe = [
+  "libvirtd",
+  "virtlogd",
+  "virtlockd",
+  "qemu",
+  "catatonit",
+  "containerd",
+  "dockerd",
+  "podman",
+]
