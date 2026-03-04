@@ -19,6 +19,7 @@ Screenshot: **perf-glance** (left) vs **top** (right):
 - CPU frequency and temperature (when available)
 - Memory (RAM and swap) with used/cached distinction
 - Hierarchical process grouping with expand/collapse
+- Process table `Cum%` column: cumulative CPU share since reset
 - Configurable refresh interval, sorting, and theme
 
 
@@ -61,10 +62,9 @@ Config file: `~/.config/perf-glance/config.toml` (created with defaults on first
 
 1. UI was inspired by [btop](https://github.com/aristocratos/btop)
 
-2. I vibe-coded this app with Claude Code. I know enough Python to
-   implement it myself, but my goal was not to write some beautiful
-   code. My objectives were utilitarian: 1) to build a tool I wanted
-   to have personally, 2) to explore an idea of user-friendly process
+2. I vibe-coded this app with AI. I know enough Python to implement it
+   myself, but my goal was not to write some beautiful code. My
+   objectives were utilitarian: 1) to build a tool I wanted to have
+   personally, 2) to explore an idea of user-friendly process
    classification. However, I take full responsibility for this code
    and I will maintain it, fix bugs, and welcome pull requests.
-

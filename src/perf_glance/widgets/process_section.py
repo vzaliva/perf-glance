@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 from rich.text import Text
@@ -14,7 +15,7 @@ from perf_glance.utils.humanize import bytes_to_human
 _STATE_PATH = Path.home() / ".config" / "perf-glance" / "state.json"
 
 # Sort cycle order
-_SORT_CYCLE = ("cpu", "mem", "count")
+_SORT_CYCLE = ("cpu", "cum", "mem", "count")
 
 
 def _flatten_groups(
@@ -53,6 +54,11 @@ class ProcessSection(Static):
         self._text_filter: str = ""
         self._expanded_state: set[tuple[str, str]] = set()
         self._theme: object = None
+        self._cum_by_key: dict[str, float] = {}
+        self._prev_pct_by_key: dict[str, float] = {}
+        self._cum_share_by_key: dict[str, float] = {}
+        self._top_level_keys: set[str] = set()
+        self._prev_sample_ts: float | None = None
 
     def refresh_display(self) -> None:
         """Re-render display from current state. Independent of data refresh."""
@@ -81,7 +87,7 @@ class ProcessSection(Static):
             pass
 
     def set_sort(self, sort_by: str) -> None:
-        """Set sort column: 'cpu', 'mem', or 'count'."""
+        """Set sort column: 'cpu', 'mem', 'count', or 'cum'."""
         self._sort_by = sort_by
 
     def cycle_sort(self) -> str:
@@ -116,7 +122,75 @@ class ProcessSection(Static):
                 user=g.user,
                 category=g.category,
                 depth=display_depth + 1,
+                group_key=f"{g.group_key}|pid:{p.pid}:{getattr(p, 'starttime_ticks', 0)}",
             ))
+
+    def reset_cumulative(self) -> None:
+        """Reset cumulative CPU counters and baseline."""
+        self._cum_by_key.clear()
+        self._prev_pct_by_key.clear()
+        self._cum_share_by_key.clear()
+        self._top_level_keys.clear()
+        self._prev_sample_ts = None
+        if self._groups and self._theme:
+            self.refresh_display()
+
+    def _update_cumulative(self, groups: list[ProcessGroup], sample_ts: float) -> None:
+        """Integrate CPU% over time using a linear (trapezoid) approximation."""
+        current_pct_by_key: dict[str, float] = {}
+        top_level_keys: set[str] = set()
+
+        def collect_rows(gs: list[ProcessGroup], depth: int) -> None:
+            for g in gs:
+                key = (g.group_key or "").strip()
+                if key:
+                    current_pct_by_key[key] = g.cpu_pct
+                    if depth == 0:
+                        top_level_keys.add(key)
+
+                # For groups without explicit hierarchy children, track per-process
+                # rows by PID+starttime so ended processes keep accumulated history.
+                if not g.children and g.processes and len(g.processes) > 1 and key:
+                    for p in g.processes:
+                        pid_key = f"{key}|pid:{p.pid}:{getattr(p, 'starttime_ticks', 0)}"
+                        current_pct_by_key[pid_key] = getattr(p, "cpu_pct", 0.0) or 0.0
+
+                if g.children:
+                    collect_rows(g.children, depth + 1)
+
+        collect_rows(groups, 0)
+
+        self._top_level_keys = top_level_keys
+        prev_ts = self._prev_sample_ts
+        if prev_ts is None:
+            self._prev_pct_by_key = current_pct_by_key
+            self._prev_sample_ts = sample_ts
+            self._recompute_cum_shares()
+            return
+
+        dt = sample_ts - prev_ts
+        if dt > 0:
+            all_keys = set(self._prev_pct_by_key) | set(current_pct_by_key)
+            for key in all_keys:
+                prev_pct = self._prev_pct_by_key.get(key, 0.0)
+                curr_pct = current_pct_by_key.get(key, 0.0)
+                self._cum_by_key[key] = self._cum_by_key.get(key, 0.0) + ((prev_pct + curr_pct) * 0.5 * dt)
+
+        self._prev_pct_by_key = current_pct_by_key
+        self._prev_sample_ts = sample_ts
+        self._recompute_cum_shares()
+
+    def _recompute_cum_shares(self) -> None:
+        """Recompute cumulative percentages normalized by top-level totals."""
+        denom = sum(max(0.0, self._cum_by_key.get(k, 0.0)) for k in self._top_level_keys)
+        if denom <= 0:
+            self._cum_share_by_key = {}
+            return
+        keys = {k for g, _ in self._flat_rows for k in [(g.group_key or "").strip()] if k}
+        self._cum_share_by_key = {
+            k: max(0.0, 100.0 * self._cum_by_key.get(k, 0.0) / denom)
+            for k in keys
+        }
 
     def _apply_expanded_state(self, groups: list[ProcessGroup]) -> None:
         """Restore expanded state from _expanded_state."""
@@ -225,6 +299,8 @@ class ProcessSection(Static):
         groups: list[ProcessGroup],
         theme: object,
         visible_rows: int,
+        sample_ts: float | None = None,
+        update_cumulative: bool = True,
     ) -> None:
         """Update display from process groups."""
         if self._user_filter is not None:
@@ -242,6 +318,8 @@ class ProcessSection(Static):
             groups = sorted(groups, key=lambda g: g.mem_bytes, reverse=True)
         elif self._sort_by == "count":
             groups = sorted(groups, key=lambda g: g.proc_count, reverse=True)
+        elif self._sort_by == "cum":
+            groups = sorted(groups, key=lambda g: self._cum_share_by_key.get(g.group_key, 0.0), reverse=True)
         else:
             groups = sorted(groups, key=lambda g: g.cpu_pct, reverse=True)
 
@@ -250,6 +328,10 @@ class ProcessSection(Static):
         self._visible_rows = visible_rows
         self._apply_expanded_state(groups)
         self._flat_rows = _flatten_groups(groups, self._text_filter)
+        if update_cumulative:
+            self._update_cumulative(groups, sample_ts if sample_ts is not None else time.monotonic())
+        else:
+            self._recompute_cum_shares()
 
         max_offset = max(0, len(self._flat_rows) - visible_rows)
         self._scroll_offset = min(self._scroll_offset, max_offset)
@@ -266,10 +348,11 @@ class ProcessSection(Static):
         USER_WIDTH = 8
         PROCS_WIDTH = 6
         CPU_WIDTH = 6
+        CUMCPU_WIDTH = 6
         MEMPCT_WIDTH = 5
         MEM_WIDTH = 7
         # Command column: 32 by default, up to 64 when horizontal space allows
-        fixed_width = USER_WIDTH + PROCS_WIDTH + CPU_WIDTH + MEMPCT_WIDTH + MEM_WIDTH + 5  # 5 spaces between columns
+        fixed_width = USER_WIDTH + PROCS_WIDTH + CPU_WIDTH + CUMCPU_WIDTH + MEMPCT_WIDTH + MEM_WIDTH + 6  # 6 spaces between columns
         content_width = getattr(self.size, "width", 0) or 80
         NAME_WIDTH = min(64, max(32, content_width - fixed_width))
 
@@ -297,6 +380,8 @@ class ProcessSection(Static):
         hdr("#Procs", self._sort_by == "count", PROCS_WIDTH)
         text.append(" ")
         hdr("Cpu%", self._sort_by == "cpu", CPU_WIDTH)
+        text.append(" ")
+        hdr("Cum%", self._sort_by == "cum", CUMCPU_WIDTH)
         text.append(" ")
         hdr("Mem%", self._sort_by == "mem", MEMPCT_WIDTH)
         text.append(" ")
@@ -339,6 +424,8 @@ class ProcessSection(Static):
             user_str = (g.user or "")[:USER_WIDTH].ljust(USER_WIDTH)
             procs_str = str(g.proc_count).rjust(PROCS_WIDTH)
             cpu_str = f"{g.cpu_pct:5.1f}".rjust(CPU_WIDTH)
+            cumcpu = self._cum_share_by_key.get(g.group_key, 0.0) if g.group_key else 0.0
+            cumcpu_str = f"{cumcpu:5.1f}".rjust(CUMCPU_WIDTH)
             mempct_str = f"{g.mem_pct:4.1f}".rjust(MEMPCT_WIDTH)
             mem_str = bytes_to_human(g.mem_bytes).rjust(MEM_WIDTH)
 
@@ -349,6 +436,8 @@ class ProcessSection(Static):
             text.append(procs_str, style=proc_count_color if not is_selected else "reverse")
             text.append(" ")
             text.append(cpu_str, style="reverse" if is_selected else None)
+            text.append(" ")
+            text.append(cumcpu_str, style="reverse" if is_selected else None)
             text.append(" ")
             text.append(mempct_str, style="reverse" if is_selected else None)
             text.append(" ")

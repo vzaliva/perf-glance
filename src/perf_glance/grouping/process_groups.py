@@ -34,6 +34,7 @@ class ProcessGroup:
     processes: list = field(default_factory=list)
     expanded: bool = False
     depth: int = 0
+    group_key: str = ""
 
 
 def _current_username() -> str:
@@ -689,6 +690,7 @@ def group_processes(
             user=user,
             category=layer,
             processes=procs,
+            group_key=full_key,
         ))
 
     result = _post_process_groups(result, other_cpu_max, other_mem_max)
@@ -725,6 +727,7 @@ def _gecko_type_name(name: str, cmdline: str) -> str:
 def _build_subgroups(
     procs: list,
     key_fn,
+    parent_group_key: str,
     user: str,
     category: str,
     ram_total_bytes: int,
@@ -744,6 +747,7 @@ def _build_subgroups(
             name=sub_name, proc_count=len(plist), cpu_pct=cpu,
             mem_bytes=mem, mem_pct=mem_pct, user=user,
             category=category, processes=plist, depth=1,
+            group_key=f"{parent_group_key}|sub:{str(k).strip().lower()}",
         ))
     return children
 
@@ -779,6 +783,7 @@ def _build_hierarchy(
                 children = _build_subgroups(
                     procs,
                     lambda p: _gecko_type_name(p.name or "", p.cmdline or ""),
+                    g.group_key,
                     g.user, "app", ram_total_bytes,
                 )
             elif g.name.lower() in agent_app_names:
@@ -786,12 +791,14 @@ def _build_hierarchy(
                 children = _build_subgroups(
                     procs,
                     lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
+                    g.group_key,
                     g.user, "app", ram_total_bytes,
                 )
             else:
                 children = _build_subgroups(
                     procs,
                     lambda p: _electron_type_name(p.cmdline or ""),
+                    g.group_key,
                     g.user, "app", ram_total_bytes,
                 )
 
@@ -799,6 +806,7 @@ def _build_hierarchy(
             children = _build_subgroups(
                 procs,
                 lambda p: _normalize_exe(p.exe or p.name or "unknown"),
+                g.group_key,
                 g.user, "tool", ram_total_bytes,
             )
 
@@ -806,6 +814,7 @@ def _build_hierarchy(
             children = _build_subgroups(
                 procs,
                 lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
+                g.group_key,
                 g.user, "system", ram_total_bytes,
             )
 
@@ -825,6 +834,7 @@ def _build_hierarchy(
             processes=g.processes,
             expanded=expanded,
             depth=0,
+            group_key=g.group_key,
         ))
     return result
 
@@ -842,6 +852,7 @@ def _post_process_groups(
     by_key: dict[tuple[str, str], ProcessGroup] = {}
     for g in groups:
         key = (g.name.lower(), g.user)
+        dedup_group_key = f"{(g.category or '').lower()}:{g.name.lower()}:{g.user}"
         if key in by_key:
             existing = by_key[key]
             by_key[key] = ProcessGroup(
@@ -854,8 +865,10 @@ def _post_process_groups(
                 category=g.category or existing.category,
                 children=existing.children or g.children,
                 processes=(existing.processes or []) + (g.processes or []),
+                group_key=dedup_group_key,
             )
         else:
+            g.group_key = dedup_group_key
             by_key[key] = g
     groups = list(by_key.values())
 
@@ -880,5 +893,6 @@ def _post_process_groups(
             mem_pct=sum(g.mem_pct for g in other),
             user="",
             category="other",
+            group_key="other:bucket",
         ))
     return kept

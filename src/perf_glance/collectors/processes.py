@@ -20,6 +20,7 @@ class ProcessInfo:
     rss_bytes: int
     cmdline: str
     uid: int = 0
+    starttime_ticks: int = 0
 
 
 def _page_size() -> int:
@@ -30,8 +31,8 @@ def _page_size() -> int:
         return 4096
 
 
-def _parse_proc_stat(pid: int) -> tuple[str, int, int, int, int] | None:
-    """Parse /proc/<pid>/stat. Returns (comm, ppid, utime, stime, rss_bytes) or None. comm may have spaces in parens."""
+def _parse_proc_stat(pid: int) -> tuple[str, int, int, int, int, int] | None:
+    """Parse /proc/<pid>/stat. Returns (comm, ppid, utime, stime, rss_bytes, starttime_ticks) or None."""
     path = Path(f"/proc/{pid}/stat")
     if not path.exists():
         return None
@@ -55,11 +56,12 @@ def _parse_proc_stat(pid: int) -> tuple[str, int, int, int, int] | None:
     try:
         utime = int(rest[9])
         stime = int(rest[10])
+        starttime_ticks = int(rest[17])
         rss_pages = int(rest[19])  # rss in pages, NOT vsize (rest[18] which would be terabytes)
     except (IndexError, ValueError):
         return None
     rss_bytes = rss_pages * _page_size()
-    return (comm, ppid, utime, stime, rss_bytes)
+    return (comm, ppid, utime, stime, rss_bytes, starttime_ticks)
 
 
 def _read_status(pid: int) -> dict[str, str]:
@@ -147,7 +149,7 @@ def read_processes(
         stat = _parse_proc_stat(pid)
         if stat is None:
             continue
-        comm, ppid, utime, stime, rss_bytes = stat
+        comm, ppid, utime, stime, rss_bytes, starttime_ticks = stat
         status = _read_status(pid)
         name = status.get("Name", comm)
         cmdline = _read_cmdline(pid)
@@ -190,6 +192,7 @@ def read_processes(
                 rss_bytes=rss_bytes,
                 cmdline=cmdline,
                 uid=uid,
+                starttime_ticks=starttime_ticks,
             )
         )
 

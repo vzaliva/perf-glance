@@ -18,6 +18,7 @@ class MockProcess:
     rss_bytes: int
     cmdline: str
     uid: int = 0
+    starttime_ticks: int = 0
 
 
 def _minimal_config(
@@ -423,6 +424,25 @@ def test_system_hierarchy() -> None:
     audio = [g for g in groups if g.name == "Audio"]
     assert len(audio) == 1
     assert len(audio[0].children) == 3
+
+
+def test_group_keys_present_for_top_level_and_children() -> None:
+    """Grouping assigns stable group_key to top-level rows and hierarchy children."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(100, 1, "cursor", "cursor", 2.0, 200_000_000, "/usr/share/cursor/cursor"),
+        MockProcess(101, 100, "cursor", "cursor", 1.0, 100_000_000, "cursor --type=renderer"),
+        MockProcess(102, 100, "cursor", "cursor", 0.5, 50_000_000, "cursor --type=utility"),
+    ]
+    config = _minimal_config()
+    groups = group_processes(processes, RAM, config, None)
+    assert len(groups) >= 1
+    for g in groups:
+        assert g.group_key
+        for c in g.children:
+            assert c.group_key
+            assert c.group_key.startswith(g.group_key + "|sub:")
 
 
 def test_default_expanded_config() -> None:

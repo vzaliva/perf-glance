@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pwd
 import os
+import time
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
@@ -36,6 +37,7 @@ class PerfGlanceApp(App):
         Binding("u", "toggle_user_filter", "user", key_display="u"),
         Binding("enter", "expand", "expand", key_display="↵"),
         Binding("/", "filter", "filter", key_display="/"),
+        Binding("0", "reset_cumulative", "reset", key_display="0"),
         Binding("?", "help", "help", key_display="?"),
         # Hidden — still active, not shown in footer
         Binding("r", "refresh", "refresh", show=False),
@@ -59,6 +61,7 @@ class PerfGlanceApp(App):
         self._prev_per_pid: dict[int, tuple[int, int]] | None = None
         self._interval_timer: object | None = None  # Timer from set_interval
         self._exe_to_app: dict[str, str] = {}
+        self._last_sample_ts: float | None = None
 
     def compose(self) -> ComposeResult:
         with Vertical():
@@ -138,7 +141,8 @@ class PerfGlanceApp(App):
         # Approximate visible process rows from container height
         proc_container = self.query_one("#process-container")
         visible_rows = max(5, (proc_container.size.height or 10) - 2)
-        proc_widget.update_processes(groups, self._config.theme, visible_rows)
+        self._last_sample_ts = time.monotonic()
+        proc_widget.update_processes(groups, self._config.theme, visible_rows, sample_ts=self._last_sample_ts)
 
     def action_refresh(self) -> None:
         """Force immediate refresh."""
@@ -245,8 +249,16 @@ class PerfGlanceApp(App):
                 proc_widget._groups,
                 self._config.theme,
                 max(5, (self.query_one("#process-container").size.height or 10) - 2),
+                sample_ts=self._last_sample_ts,
+                update_cumulative=False,
             )
+
+    def action_reset_cumulative(self) -> None:
+        """Reset cumulative process CPU counters."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        proc_widget.reset_cumulative()
+        self.notify("Cumulative CPU counters reset")
 
     def action_help(self) -> None:
         """Show help."""
-        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  ↑↓ move  enter expand  ← collapse")
+        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  0 reset  ↑↓ move  enter expand  ← collapse")
