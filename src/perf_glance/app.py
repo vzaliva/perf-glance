@@ -6,10 +6,13 @@ import pwd
 import os
 import signal
 import time
+from pathlib import Path
+from typing import cast
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
 from textual.binding import Binding
+from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, Static
 
 from perf_glance.collectors import (
@@ -26,6 +29,42 @@ from perf_glance.grouping.desktop_entries import scan_desktop_entries
 from perf_glance.widgets import CPUSection, MemorySection, ProcessSection
 
 
+class ProcessInfoScreen(ModalScreen[None]):
+    """Popup screen with details for one selected process."""
+
+    BINDINGS = [
+        Binding("escape", "close", "close", key_display="esc"),
+        Binding("k", "kill", "kill", key_display="k"),
+        Binding("K", "kill9", "kill-9", key_display="K"),
+    ]
+
+    def __init__(self, title: str, body: str):
+        super().__init__()
+        self._title = title
+        self._body = body
+
+    def compose(self) -> ComposeResult:
+        yield Container(
+            Static(self._title, id="proc-popup-title"),
+            Static(self._body, id="proc-popup-body"),
+            Static("ESC close   k SIGTERM   K SIGKILL", id="proc-popup-hint"),
+            id="proc-popup",
+        )
+
+    def action_close(self) -> None:
+        self.app.pop_screen()
+
+    def action_kill(self) -> None:
+        app = cast("PerfGlanceApp", self.app)
+        app.action_kill()
+        app.pop_screen()
+
+    def action_kill9(self) -> None:
+        app = cast("PerfGlanceApp", self.app)
+        app.action_kill9()
+        app.pop_screen()
+
+
 class PerfGlanceApp(App):
     """Main TUI application."""
 
@@ -36,7 +75,7 @@ class PerfGlanceApp(App):
         Binding("q", "quit", "quit", key_display="q"),
         Binding("s", "sort", "sort", key_display="s"),
         Binding("u", "toggle_user_filter", "user", key_display="u"),
-        Binding("enter", "expand", "expand", key_display="↵"),
+        Binding("enter", "inspect", "info", key_display="↵"),
         Binding("/", "filter", "filter", key_display="/"),
         Binding("0", "reset_cumulative", "reset", key_display="0"),
         Binding("k", "kill", "kill", key_display="k"),
@@ -200,6 +239,17 @@ class PerfGlanceApp(App):
         proc_widget = self.query_one("#processes", ProcessSection)
         proc_widget.do_expand()
 
+    def action_inspect(self) -> None:
+        """Open process info popup for the selected row's representative PID."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        proc = proc_widget.selected_individual_process()
+        if proc is None:
+            return
+        pid = int(getattr(proc, "pid", 0) or 0)
+        title = f"Process {pid}  {getattr(proc, 'exe', '') or getattr(proc, 'name', '') or ''}".strip()
+        body = self._process_popup_body(proc)
+        self.push_screen(ProcessInfoScreen(title, body))
+
     def action_collapse(self) -> None:
         """Collapse selected process group (instant, no data refresh)."""
         proc_widget = self.query_one("#processes", ProcessSection)
@@ -264,7 +314,123 @@ class PerfGlanceApp(App):
 
     def action_help(self) -> None:
         """Show help."""
-        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  0 reset  k kill  K kill-9  ↑↓ move  enter expand  ← collapse")
+        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  0 reset  k kill  K kill-9  ↑↓ move  enter info  → expand  ← collapse")
+
+    @staticmethod
+    def _read_status_map(pid: int) -> dict[str, str]:
+        """Read /proc/<pid>/status key-value fields."""
+        out: dict[str, str] = {}
+        path = Path(f"/proc/{pid}/status")
+        if not path.exists():
+            return out
+        try:
+            for line in path.read_text().splitlines():
+                if ":" not in line:
+                    continue
+                k, v = line.split(":", 1)
+                out[k.strip()] = v.strip()
+        except OSError:
+            return out
+        return out
+
+    @staticmethod
+    def _resolve_exe_path(pid: int) -> str:
+        """Resolve executable symlink for pid."""
+        try:
+            return str(Path(f"/proc/{pid}/exe").resolve())
+        except (OSError, RuntimeError):
+            return ""
+
+    @staticmethod
+    def _resolve_cwd_path(pid: int) -> str:
+        """Resolve current working directory symlink for pid."""
+        try:
+            return str(Path(f"/proc/{pid}/cwd").resolve())
+        except (OSError, RuntimeError):
+            return ""
+
+    @staticmethod
+    def _read_uptime_seconds() -> float | None:
+        """Read system uptime seconds from /proc/uptime."""
+        path = Path("/proc/uptime")
+        try:
+            first = path.read_text().split()[0]
+            return float(first)
+        except (OSError, ValueError, IndexError):
+            return None
+
+    @staticmethod
+    def _format_duration(seconds: float) -> str:
+        """Format seconds as compact human duration."""
+        total = max(0, int(seconds))
+        days, rem = divmod(total, 86400)
+        hours, rem = divmod(rem, 3600)
+        mins, secs = divmod(rem, 60)
+        if days:
+            return f"{days}d {hours}h"
+        if hours:
+            return f"{hours}h {mins}m"
+        if mins:
+            return f"{mins}m {secs}s"
+        return f"{secs}s"
+
+    @classmethod
+    def _process_age(cls, start_ticks: int) -> str:
+        """Compute process age from start ticks since boot."""
+        if start_ticks <= 0:
+            return "?"
+        uptime = cls._read_uptime_seconds()
+        if uptime is None:
+            return "?"
+        try:
+            hz = os.sysconf("SC_CLK_TCK")
+            hz_val = float(hz)
+        except (AttributeError, ValueError, OSError, TypeError):
+            return "?"
+        if hz_val <= 0:
+            return "?"
+        started_at = float(start_ticks) / hz_val
+        age = uptime - started_at
+        if age < 0:
+            return "?"
+        return cls._format_duration(age)
+
+    def _process_popup_body(self, proc: object) -> str:
+        """Build popup body text for one process."""
+        from perf_glance.utils.humanize import bytes_to_human
+
+        pid = int(getattr(proc, "pid", 0) or 0)
+        ppid = int(getattr(proc, "ppid", 0) or 0)
+        uid = int(getattr(proc, "uid", 0) or 0)
+        try:
+            user = pwd.getpwuid(uid).pw_name
+        except (KeyError, OverflowError):
+            user = str(uid)
+
+        status = self._read_status_map(pid)
+        exe = str(getattr(proc, "exe", "") or getattr(proc, "name", "") or "")
+        exe_path = self._resolve_exe_path(pid)
+        cwd_path = self._resolve_cwd_path(pid)
+        cmdline = str(getattr(proc, "cmdline", "") or "")
+        state = status.get("State", "")
+        threads = status.get("Threads", "")
+        cpu_pct = float(getattr(proc, "cpu_pct", 0.0) or 0.0)
+        rss = int(getattr(proc, "rss_bytes", 0) or 0)
+        start_ticks = int(getattr(proc, "starttime_ticks", 0) or 0)
+        age = self._process_age(start_ticks)
+
+        lines = [
+            f"PID: {pid}    PPID: {ppid}    User: {user} ({uid})",
+            f"Exe: {exe}",
+            f"Path: {exe_path or '[unavailable]'}",
+            f"Workdir: {cwd_path or '[unavailable]'}",
+            f"CPU%: {cpu_pct:.1f}    Mem: {bytes_to_human(rss)}    Threads: {threads or '?'}",
+            f"State: {state or '?'}    Age: {age}",
+            "",
+            "Command line:",
+            cmdline or "[empty]",
+        ]
+        return "\n".join(lines)
 
     def _kill_selected(self, sig: int, kill_group: bool) -> None:
         """Send signal to selected process or selected row's whole group."""

@@ -136,3 +136,63 @@ def test_selected_pids_group_kill_collects_nested_children_recursively() -> None
     section._cursor_index = 0
 
     assert section.selected_pids(kill_group=True) == [101, 102, 103]
+
+
+def test_selected_individual_process_for_pid_leaf_or_single_process_rows() -> None:
+    """Process popup selection works when recursive PID set has size 1."""
+    section = ProcessSection()
+    proc = SimpleNamespace(pid=77, exe="lean", name="lean", cpu_pct=1.0, rss_bytes=1, starttime_ticks=5)
+    leaf = ProcessGroup(
+        name="PID 77  lean",
+        proc_count=1,
+        cpu_pct=1.0,
+        mem_bytes=1,
+        mem_pct=0.1,
+        group_key="tool:lean|pid:77:5",
+    )
+    leaf.processes = [proc]
+    section._flat_rows = [(leaf, 1)]
+    section._cursor_index = 0
+    assert section.selected_individual_process() is proc
+
+    make_proc = SimpleNamespace(pid=88, exe="make", name="make", cpu_pct=2.0, rss_bytes=2, starttime_ticks=6)
+    make_row = ProcessGroup(
+        name="Make",
+        proc_count=1,
+        cpu_pct=2.0,
+        mem_bytes=2,
+        mem_pct=0.2,
+        group_key="tool:make",
+    )
+    make_row.processes = [make_proc]
+    section._flat_rows = [(make_row, 0)]
+    section._cursor_index = 0
+    assert section.selected_individual_process() is make_proc
+
+    group = ProcessGroup(
+        name="Lean build (2 procs)",
+        proc_count=2,
+        cpu_pct=2.0,
+        mem_bytes=2,
+        mem_pct=0.2,
+        group_key="tool:lean",
+    )
+    group.processes = [SimpleNamespace(pid=1), SimpleNamespace(pid=2)]
+    section._flat_rows = [(group, 0)]
+    section._cursor_index = 0
+    assert section.selected_individual_process() is None
+
+
+def test_selected_individual_process_for_nested_single_element_group() -> None:
+    """Enter on group row opens popup when subtree contains exactly one PID."""
+    section = ProcessSection()
+    only = SimpleNamespace(pid=501, exe="lake", name="lake", cpu_pct=1.0, rss_bytes=1, starttime_ticks=9)
+    root = ProcessGroup(name="Lake", proc_count=1, cpu_pct=1.0, mem_bytes=1, mem_pct=0.1, group_key="tool:lake")
+    child = ProcessGroup(name="Worker", proc_count=1, cpu_pct=1.0, mem_bytes=1, mem_pct=0.1, group_key="tool:lake|sub:worker")
+    child.processes = [only]
+    root.children = [child]
+    root.processes = []
+
+    section._flat_rows = [(root, 0)]
+    section._cursor_index = 0
+    assert section.selected_individual_process() is only

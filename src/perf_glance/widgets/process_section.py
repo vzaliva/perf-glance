@@ -332,6 +332,49 @@ class ProcessSection(Static):
             return True
         return False
 
+    def selected_row(self) -> tuple[ProcessGroup, int] | None:
+        """Return currently selected flattened row."""
+        if not self._flat_rows or self._cursor_index < 0 or self._cursor_index >= len(self._flat_rows):
+            return None
+        return self._flat_rows[self._cursor_index]
+
+    def selected_individual_process(self) -> object | None:
+        """Return selected process object for popup.
+
+        Uses recursive PID collection (same logic as group-kill) and only
+        returns a process when exactly one PID is associated with the row.
+        """
+        row = self.selected_row()
+        if row is None:
+            return None
+        g, _ = row
+        pids = self.selected_pids(kill_group=True)
+        if len(pids) != 1:
+            return None
+        target_pid = pids[0]
+
+        def find_proc(node: ProcessGroup) -> object | None:
+            for p in (node.processes or []):
+                if getattr(p, "pid", None) == target_pid:
+                    return p
+            for child in (node.children or []):
+                found = find_proc(child)
+                if found is not None:
+                    return found
+            return None
+
+        found = find_proc(g)
+        if found is not None:
+            return found
+
+        # Fallback: selected row itself may be a synthetic PID leaf without
+        # attached process object.
+        if "|pid:" in (g.group_key or ""):
+            pid = self._pid_from_group_key(g.group_key)
+            if pid == target_pid:
+                return None
+        return None
+
     def set_text_filter(self, s: str) -> None:
         """Set filter string; empty clears filter."""
         self._text_filter = s

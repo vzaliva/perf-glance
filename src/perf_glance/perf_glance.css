@@ -32,3 +32,32 @@ Vertical {
     display: none;
     height: 1;
 }
+
+ProcessInfoScreen {
+    align: center middle;
+}
+
+#proc-popup {
+    width: 80%;
+    max-width: 120;
+    height: auto;
+    max-height: 80%;
+    border: round $accent;
+    background: $surface;
+    padding: 1 2;
+}
+
+#proc-popup-title {
+    text-style: bold;
+    color: $text;
+    margin-bottom: 1;
+}
+
+#proc-popup-body {
+    color: $text;
+}
+
+#proc-popup-hint {
+    margin-top: 1;
+    color: $text-muted;
+}
