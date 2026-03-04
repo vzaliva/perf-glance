@@ -62,6 +62,8 @@ def test_make_pid_leaves_uses_pid_and_starttime_in_group_key() -> None:
     section._make_pid_leaves(parent, 0)
     assert len(parent.children) == 1
     assert parent.children[0].group_key == "tool:cc1|pid:123:555"
+    assert len(parent.children[0].processes) == 1
+    assert parent.children[0].processes[0].pid == 123
 
 
 def test_reset_cumulative_clears_state() -> None:
@@ -88,3 +90,49 @@ def test_sort_cycle_includes_cumulative() -> None:
     assert section.cycle_sort() == "mem"
     assert section.cycle_sort() == "count"
     assert section.cycle_sort() == "cpu"
+
+
+def test_selected_pids_single_process_row() -> None:
+    """k targets exactly one PID when selected row maps to one process."""
+    section = ProcessSection()
+    proc = SimpleNamespace(pid=42, exe="lean", name="lean", cpu_pct=1.0, rss_bytes=1, starttime_ticks=1)
+    g = ProcessGroup(name="Lean", proc_count=1, cpu_pct=1.0, mem_bytes=1, mem_pct=0.1, group_key="tool:lean")
+    g.processes = [proc]
+    section._flat_rows = [(g, 0)]
+    section._cursor_index = 0
+
+    assert section.selected_pids(kill_group=False) == [42]
+    assert section.selected_pids(kill_group=True) == [42]
+
+
+def test_selected_pids_requires_single_row_for_kill() -> None:
+    """k does not target multi-process rows; K targets the whole selected row."""
+    section = ProcessSection()
+    p1 = SimpleNamespace(pid=10, exe="lean", name="lean", cpu_pct=1.0, rss_bytes=1, starttime_ticks=1)
+    p2 = SimpleNamespace(pid=11, exe="lake", name="lake", cpu_pct=1.0, rss_bytes=1, starttime_ticks=2)
+    g = ProcessGroup(name="Claude", proc_count=2, cpu_pct=2.0, mem_bytes=2, mem_pct=0.2, group_key="app:claude")
+    g.processes = [p1, p2]
+    section._flat_rows = [(g, 0)]
+    section._cursor_index = 0
+
+    assert section.selected_pids(kill_group=False) == []
+    assert section.selected_pids(kill_group=True) == [10, 11]
+
+
+def test_selected_pids_group_kill_collects_nested_children_recursively() -> None:
+    """K collects PIDs from selected group and all nested subgroups."""
+    section = ProcessSection()
+    root = ProcessGroup(name="Root", proc_count=3, cpu_pct=3.0, mem_bytes=3, mem_pct=0.3, group_key="app:root")
+    child = ProcessGroup(name="Child", proc_count=2, cpu_pct=2.0, mem_bytes=2, mem_pct=0.2, group_key="app:root|sub:child")
+    leaf = ProcessGroup(name="Leaf", proc_count=1, cpu_pct=1.0, mem_bytes=1, mem_pct=0.1, group_key="app:root|sub:child|sub:leaf")
+
+    child.processes = [SimpleNamespace(pid=101), SimpleNamespace(pid=102)]
+    leaf.processes = [SimpleNamespace(pid=103)]
+    child.children = [leaf]
+    root.children = [child]
+    root.processes = []
+
+    section._flat_rows = [(root, 0)]
+    section._cursor_index = 0
+
+    assert section.selected_pids(kill_group=True) == [101, 102, 103]

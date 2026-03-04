@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from pathlib import Path
 
@@ -16,6 +17,7 @@ _STATE_PATH = Path.home() / ".config" / "perf-glance" / "state.json"
 
 # Sort cycle order
 _SORT_CYCLE = ("cpu", "cum", "mem", "count")
+_PID_GROUP_KEY_RE = re.compile(r"\|pid:(\d+):")
 
 
 def _flatten_groups(
@@ -121,9 +123,63 @@ class ProcessSection(Static):
                 mem_pct=0.0,
                 user=g.user,
                 category=g.category,
+                processes=[p],
                 depth=display_depth + 1,
                 group_key=f"{g.group_key}|pid:{p.pid}:{getattr(p, 'starttime_ticks', 0)}",
             ))
+
+    @staticmethod
+    def _pid_from_group_key(group_key: str) -> int | None:
+        """Extract PID from per-PID leaf group_key suffix."""
+        m = _PID_GROUP_KEY_RE.search(group_key or "")
+        if not m:
+            return None
+        try:
+            return int(m.group(1))
+        except ValueError:
+            return None
+
+    def selected_pids(self, kill_group: bool = False) -> list[int]:
+        """Return PIDs targeted by current selection.
+
+        kill_group=False: one PID only (selected row must represent one process)
+        kill_group=True: all processes represented by selected row
+        """
+        if not self._flat_rows or self._cursor_index < 0 or self._cursor_index >= len(self._flat_rows):
+            return []
+        g, _ = self._flat_rows[self._cursor_index]
+        pids: list[int] = []
+        procs = g.processes or []
+        if kill_group:
+            def collect_recursive(node: ProcessGroup) -> None:
+                for p in (node.processes or []):
+                    pid_val = getattr(p, "pid", None)
+                    if pid_val is not None:
+                        pids.append(int(pid_val))
+                pid_from_key = self._pid_from_group_key(node.group_key)
+                if pid_from_key is not None:
+                    pids.append(pid_from_key)
+                for child in (node.children or []):
+                    collect_recursive(child)
+
+            collect_recursive(g)
+        else:
+            if len(procs) == 1 and getattr(procs[0], "pid", None) is not None:
+                pids = [int(procs[0].pid)]
+            elif not procs:
+                pid = self._pid_from_group_key(g.group_key)
+                if pid is not None:
+                    pids = [pid]
+
+        # Stable dedup while preserving order
+        seen: set[int] = set()
+        deduped: list[int] = []
+        for pid in pids:
+            if pid in seen:
+                continue
+            seen.add(pid)
+            deduped.append(pid)
+        return deduped
 
     def reset_cumulative(self) -> None:
         """Reset cumulative CPU counters and baseline."""

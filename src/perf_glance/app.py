@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pwd
 import os
+import signal
 import time
 
 from textual.app import App, ComposeResult
@@ -38,6 +39,8 @@ class PerfGlanceApp(App):
         Binding("enter", "expand", "expand", key_display="↵"),
         Binding("/", "filter", "filter", key_display="/"),
         Binding("0", "reset_cumulative", "reset", key_display="0"),
+        Binding("k", "kill", "kill", key_display="k"),
+        Binding("K", "kill9", "kill-9", key_display="K"),
         Binding("?", "help", "help", key_display="?"),
         # Hidden — still active, not shown in footer
         Binding("r", "refresh", "refresh", show=False),
@@ -261,4 +264,53 @@ class PerfGlanceApp(App):
 
     def action_help(self) -> None:
         """Show help."""
-        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  0 reset  ↑↓ move  enter expand  ← collapse")
+        self.notify("q quit  r refresh  +/- interval  s sort  u user  / filter  0 reset  k kill  K kill-9  ↑↓ move  enter expand  ← collapse")
+
+    def _kill_selected(self, sig: int, kill_group: bool) -> None:
+        """Send signal to selected process or selected row's whole group."""
+        proc_widget = self.query_one("#processes", ProcessSection)
+        pids = proc_widget.selected_pids(kill_group=kill_group)
+        # If SIGTERM is requested on a non-leaf row, fall back to killing the
+        # full selected group tree recursively.
+        if not pids and not kill_group:
+            pids = proc_widget.selected_pids(kill_group=True)
+        if not pids:
+            self.notify("No process PIDs found for selected row/group")
+            return
+
+        ok = 0
+        denied = 0
+        missing = 0
+        failed = 0
+        for pid in pids:
+            try:
+                os.kill(pid, sig)
+                ok += 1
+            except ProcessLookupError:
+                missing += 1
+            except PermissionError:
+                denied += 1
+            except OSError:
+                failed += 1
+
+        parts: list[str] = []
+        if ok:
+            parts.append(f"signaled {ok}")
+        if missing:
+            parts.append(f"missing {missing}")
+        if denied:
+            parts.append(f"denied {denied}")
+        if failed:
+            parts.append(f"failed {failed}")
+        signal_name = "SIGKILL" if sig == signal.SIGKILL else "SIGTERM"
+        self.notify(f"{signal_name}: " + ", ".join(parts))
+        if ok:
+            self._refresh()
+
+    def action_kill(self) -> None:
+        """Kill selected process (SIGTERM)."""
+        self._kill_selected(signal.SIGTERM, kill_group=False)
+
+    def action_kill9(self) -> None:
+        """Kill selected group (SIGKILL)."""
+        self._kill_selected(signal.SIGKILL, kill_group=True)
