@@ -39,14 +39,16 @@ chmod +x perf-glance
 
 The script uses [uv](https://docs.astral.sh/uv/) to fetch and run perf-glance from GitHub on first use.
 
-Or via uvx / install:
+Or via uvx (from GitHub, works without PyPI):
 
 ```sh
-uvx perf-glance
+uvx --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
 ```
 
+Or install and run:
+
 ```sh
-uv tool install perf-glance
+uv tool install --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
 perf-glance
 ```
 
