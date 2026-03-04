@@ -253,12 +253,15 @@ class ProcessSection(Static):
         if not self._groups:
             return
         visible_rows = self._visible_rows
-        NAME_WIDTH = 32
         USER_WIDTH = 8
         PROCS_WIDTH = 6
         CPU_WIDTH = 6
         MEMPCT_WIDTH = 5
         MEM_WIDTH = 7
+        # Command column: 32 by default, up to 64 when horizontal space allows
+        fixed_width = USER_WIDTH + PROCS_WIDTH + CPU_WIDTH + MEMPCT_WIDTH + MEM_WIDTH + 5  # 5 spaces between columns
+        content_width = getattr(self.size, "width", 0) or 80
+        NAME_WIDTH = min(64, max(32, content_width - fixed_width))
 
         proc_count_color = getattr(theme, "proc_count", "#4dd0e1")
         bracket_color = "white"

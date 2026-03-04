@@ -82,6 +82,7 @@ def _braille_graph_lines(
         raw = [0.0] * (n_samples - len(raw)) + raw
 
     lines: list[Text] = []
+    axis_row = half - 1  # Central baseline (0% axis) in symmetric layout
     for row in range(height):
         is_top = row < half
         # Vertical band for this row (btop: cur_high/cur_low)
@@ -113,8 +114,11 @@ def _braille_graph_lines(
             char = symbols[sym_idx]
 
             if char == " ":
-                # btop graph_bg: grey baseline dots for empty cells
-                line.append(_BRAILLE_UP[6], style="dim")
+                # Dotted baseline only on central axis row; plain space elsewhere
+                if row == axis_row:
+                    line.append(_BRAILLE_UP[6], style="dim")
+                else:
+                    line.append(" ")
             else:
                 color = _cpu_color(max(v_prev, v_curr), theme)
                 line.append(char, style=color)
