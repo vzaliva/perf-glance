@@ -84,13 +84,18 @@ class ProcessSection(Static):
         MEM_WIDTH = 7
 
         proc_count_color = getattr(theme, "proc_count", "#4dd0e1")
-        sort_active = getattr(theme, "proc_sort_active", "bold")
+        bracket_color = "white"  # only brackets get this; content stays header_color
         header_color = getattr(theme, "proc_count", "#4dd0e1")
 
-        # Active sort column gets brackets
-        h_procs = "[#Procs]" if self._sort_by == "count" else "#Procs"
-        h_cpu   = "[Cpu%]"   if self._sort_by == "cpu"   else "Cpu%"
-        h_mem   = "[Mem%]"   if self._sort_by == "mem"   else "Mem%"
+        def _header_cell(label: str, is_active: bool, width: int) -> None:
+            if is_active:
+                pad = max(0, width - len(label) - 2)
+                text.append(" " * pad, style=header_color)
+                text.append("[", style=bracket_color)
+                text.append(label, style=header_color)
+                text.append("]", style=bracket_color)
+            else:
+                text.append(label.rjust(width), style=header_color)
 
         text = Text()
         # Filter indicator in header
@@ -99,11 +104,11 @@ class ProcessSection(Static):
         text.append(" ")
         text.append("User".ljust(USER_WIDTH), style=header_color)
         text.append(" ")
-        text.append(h_procs.rjust(PROCS_WIDTH), style=sort_active if self._sort_by == "count" else header_color)
+        _header_cell("#Procs", self._sort_by == "count", PROCS_WIDTH)
         text.append(" ")
-        text.append(h_cpu.rjust(CPU_WIDTH), style=sort_active if self._sort_by == "cpu" else header_color)
+        _header_cell("Cpu%", self._sort_by == "cpu", CPU_WIDTH)
         text.append(" ")
-        text.append(h_mem.rjust(MEMPCT_WIDTH), style=sort_active if self._sort_by == "mem" else header_color)
+        _header_cell("Mem%", self._sort_by == "mem", MEMPCT_WIDTH)
         text.append(" ")
         text.append("MemB".rjust(MEM_WIDTH) + "\n", style=header_color)
 

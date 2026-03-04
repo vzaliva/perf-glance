@@ -131,16 +131,6 @@ def read_processes(
     processes: list[ProcessInfo] = []
 
     cpu_delta = current_cpu_total - previous_cpu_total
-    # Count logical CPUs from /proc/stat
-    num_cores = 0
-    with open("/proc/stat") as f:
-        for line in f:
-            if line.startswith("cpu"):
-                if line.startswith("cpu "):
-                    continue
-                num_cores += 1
-    if num_cores == 0:
-        num_cores = 1
 
     for pid in pids:
         stat = _parse_proc_stat(pid)
@@ -175,8 +165,9 @@ def read_processes(
         if previous_per_pid and pid in previous_per_pid and cpu_delta > 0:
             prev_total = previous_per_pid[pid][0]
             process_delta = total_time - prev_total
-            # process_delta/cpu_delta is fraction of one core; * num_cores for total system
-            cpu_pct = 100.0 * process_delta * num_cores / cpu_delta
+            # process_delta/cpu_delta = fraction of total system CPU (aggregate already sums all cores)
+            cpu_pct = 100.0 * process_delta / cpu_delta
+            cpu_pct = min(100.0, max(0.0, cpu_pct))  # clamp 0-100
 
         processes.append(
             ProcessInfo(

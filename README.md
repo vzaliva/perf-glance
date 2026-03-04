@@ -12,11 +12,21 @@ A terminal-based system utilization monitor for Linux, inspired by btop but focu
 
 ## Quick Start
 
+**One-liner (no install):** download the wrapper script and run:
+
+```sh
+curl -O https://raw.githubusercontent.com/vzaliva/perf-glance/main/perf-glance
+chmod +x perf-glance
+./perf-glance
+```
+
+The script uses [uv](https://docs.astral.sh/uv/) to fetch and run perf-glance from GitHub on first use.
+
+Or via uvx / install:
+
 ```sh
 uvx perf-glance
 ```
-
-Or install and run:
 
 ```sh
 uv tool install perf-glance
@@ -27,10 +37,3 @@ perf-glance
 
 Config file: `~/.config/perf-glance/config.toml` (created with defaults on first run).
 
-## Development
-
-```sh
-uv sync
-uv run perf-glance
-uv run pytest
-```

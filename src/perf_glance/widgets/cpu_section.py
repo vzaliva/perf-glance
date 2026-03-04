@@ -9,16 +9,24 @@ from textual.widgets import Static
 
 from perf_glance.collectors.cpu import CPUSnapshot
 
-# Eighth-block chars: index 1–8 = ▁▂▃▄▅▆▇█
-_BLOCKS = " ▁▂▃▄▅▆▇█"
-# Lower one-eighth block used as dim baseline in per-core charts
-_BASELINE = "▁"
-
-# Braille dot bit masks per column, ordered bottom→top (4 dot rows per char)
-# Left column:  dot7=0x40, dot3=0x04, dot2=0x02, dot1=0x01
-# Right column: dot8=0x80, dot6=0x20, dot5=0x10, dot4=0x08
-_BRAILLE_L = (0x40, 0x04, 0x02, 0x01)  # di=0 is bottom dot, di=3 is top
-_BRAILLE_R = (0x80, 0x20, 0x10, 0x08)
+# Btop-style braille symbols: each char encodes two values (prev, curr) as 0-4 each.
+# Index = prev*5 + curr. "braille_up" fills from bottom, "braille_down" from top.
+# Index 6 = graph_bg: light grey baseline for empty/low cells (btop's inactive_fg).
+# From https://github.com/aristocratos/btop
+_BRAILLE_UP = (
+    " ", "⢀", "⢠", "⢰", "⢸",
+    "⡀", "⣀", "⣠", "⣰", "⣸",
+    "⡄", "⣄", "⣤", "⣴", "⣼",
+    "⡆", "⣆", "⣦", "⣶", "⣾",
+    "⡇", "⣇", "⣧", "⣷", "⣿",
+)
+_BRAILLE_DOWN = (
+    " ", "⠈", "⠘", "⠸", "⢸",
+    "⠁", "⠉", "⠙", "⠹", "⢹",
+    "⠃", "⠋", "⠛", "⠻", "⢻",
+    "⠇", "⠏", "⠟", "⠿", "⢿",
+    "⡇", "⡏", "⡟", "⡿", "⣿",
+)
 
 # Per-core right-panel layout per column: "C00 " + chart + " 100%"
 _LABEL_W = 4   # "C00 "
@@ -44,26 +52,30 @@ def _temp_color(temp: float, theme: object) -> str:
     return getattr(theme, "temp_high", "white")
 
 
+def _quantize_to_level(value: float, cur_high: float, cur_low: float, mod: float) -> int:
+    """Map value to 0-4 level for btop braille symbol lookup (same as btop's Graph::_create)."""
+    clamp_min = 0
+    if value >= cur_high:
+        return 4
+    if value <= cur_low:
+        return clamp_min
+    r = cur_high - cur_low
+    if r <= 0:
+        return clamp_min
+    return min(4, max(0, int(round((value - cur_low) * 4 / r + mod))))
+
+
 def _braille_graph_lines(
     values: list[float], width: int, height: int, theme: object
 ) -> list[Text]:
-    """Render a symmetric center-axis braille graph (btop style).
+    """Render aggregate CPU graph using btop-style braille (5x5 symbol table).
 
-    The graph is split into top half and bottom half around a center axis.
-    Dots grow outward from the axis continuously in both directions.
-
-    Top half: dots fill from the BOTTOM of each char (axis side) upward.
-    Bottom half: dots fill from the TOP of each char (axis side) downward.
-
-    Resolution per side = half * 4 dot-rows, so 100% fills all the way to
-    the top/bottom border.
-
-    Each column is colored based on its current CPU value (green/yellow/red).
-    The axis row shows a single "─" on the left edge only (not full-width).
+    Symmetric layout: top half uses braille_up (fills from axis upward), bottom
+    half uses braille_down (fills from axis downward). Each braille char encodes
+    two consecutive samples (prev, curr) as 0-4 each. Color from max(prev,curr).
     """
     half = max(1, height // 2)
-    max_dots = half * 4  # dot-rows of resolution per side
-
+    mod = 0.1
     n_samples = width * 2
     raw: list[float] = values[-n_samples:] if len(values) >= n_samples else list(values)
     if len(raw) < n_samples:
@@ -72,63 +84,81 @@ def _braille_graph_lines(
     lines: list[Text] = []
     for row in range(height):
         is_top = row < half
-        # Distance (in rows) from this terminal row to the axis row
-        r_from_axis = (half - 1 - row) if is_top else (row - half)
-        is_axis_row = is_top and r_from_axis == 0  # row just above the axis gap
+        # Vertical band for this row (btop: cur_high/cur_low)
+        if is_top:
+            # Top half: row 0 = top (high %), row half-1 = axis
+            horizon = row
+            cur_high = 100.0 * (half - horizon) / half
+            cur_low = 100.0 * (half - (horizon + 1)) / half
+            symbols = _BRAILLE_UP
+        else:
+            # Bottom half: mirror of top — axis row shows low band, bottom shows high
+            horizon_inner = row - half
+            horizon = half - 1 - horizon_inner
+            cur_high = 100.0 * (half - horizon) / half
+            cur_low = 100.0 * (half - (horizon + 1)) / half
+            symbols = _BRAILLE_DOWN
 
         line = Text()
+        last = raw[0] if len(raw) > 0 else 0.0
         for col in range(width):
-            v_l = raw[col * 2]
-            v_r = raw[col * 2 + 1]
-            n_l = round(v_l / 100.0 * max_dots)
-            n_r = round(v_r / 100.0 * max_dots)
+            idx_l = col * 2
+            idx_r = col * 2 + 1
+            v_prev = raw[idx_l] if idx_l < len(raw) else 0.0
+            v_curr = raw[idx_r] if idx_r < len(raw) else 0.0
 
-            bits = 0
-            for di in range(4):
-                if is_top:
-                    # axis-distance of dot di: bottom dot (di=0) is closest to axis
-                    ad = 4 * r_from_axis + di + 1
-                else:
-                    # axis-distance of dot di: top dot (di=3) is closest to axis
-                    ad = 4 * r_from_axis + (3 - di) + 1
-                if ad <= n_l:
-                    bits |= _BRAILLE_L[di]
-                if ad <= n_r:
-                    bits |= _BRAILLE_R[di]
+            r0 = _quantize_to_level(v_prev, cur_high, cur_low, mod)
+            r1 = _quantize_to_level(v_curr, cur_high, cur_low, mod)
+            sym_idx = r0 * 5 + r1
+            char = symbols[sym_idx]
 
-            if bits == 0:
-                # Axis indicator: single "─" at left edge only
-                if is_axis_row and col == 0:
-                    line.append("─", style="dim")
-                else:
-                    line.append(" ")
+            if char == " ":
+                # btop graph_bg: grey baseline dots for empty cells
+                line.append(_BRAILLE_UP[6], style="dim")
             else:
-                color = _cpu_color(max(v_l, v_r), theme)
-                line.append(chr(0x2800 + bits), style=color)
+                color = _cpu_color(max(v_prev, v_curr), theme)
+                line.append(char, style=color)
+            last = v_curr
         lines.append(line)
     return lines
 
 
-def _mini_chart_segments(
-    history: list[tuple[float, str]], width: int
+def _braille_per_core_chart(
+    history: list[tuple[float, str]], width: int, theme: object
 ) -> list[tuple[str, str | None]]:
-    """Return (char, color) pairs for a 1-char-high per-core history.
+    """Return (char, color) pairs for 1-row per-core chart using btop braille.
 
-    color is None for baseline chars (rendered dim).
-    Colors come from the stored snapshot so past spikes retain their color.
+    Each braille char encodes two consecutive samples; color from max(prev, curr).
+    Same 5x5 symbol table as btop's height=1 graphs.
     """
     n = len(history)
-    if n >= width:
-        samples: list[tuple[float, str]] = list(history[-width:])
+    if n >= width * 2:
+        samples: list[tuple[float, str]] = list(history[-(width * 2):])
     else:
-        samples = [(0.0, "")] * (width - n) + list(history)
+        pad = (width * 2) - n
+        samples = [(0.0, "")] * pad + list(history)
+
     result: list[tuple[str, str | None]] = []
-    for v, color in samples:
-        idx = min(int(v / 100 * 8 + 0.5), 8)
-        if idx == 0:
-            result.append((_BASELINE, None))
+    mod = 0.3  # btop uses 0.3 for height==1
+    cur_high, cur_low = 100.0, 0.0
+
+    for col in range(width):
+        idx_prev = col * 2
+        idx_curr = col * 2 + 1
+        v_prev = samples[idx_prev][0] if idx_prev < len(samples) else 0.0
+        v_curr = samples[idx_curr][0] if idx_curr < len(samples) else 0.0
+
+        r0 = _quantize_to_level(v_prev, cur_high, cur_low, mod)
+        r1 = _quantize_to_level(v_curr, cur_high, cur_low, mod)
+        sym_idx = r0 * 5 + r1
+        char = _BRAILLE_UP[sym_idx]
+
+        if char == " ":
+            # btop uses graph_bg (index 6) with inactive_fg for empty cells
+            result.append((_BRAILLE_UP[6], "dim"))  # grey baseline dots
         else:
-            result.append((_BLOCKS[idx], color))
+            color = _cpu_color(max(v_prev, v_curr), theme)
+            result.append((char, color))
     return result
 
 
@@ -214,10 +244,10 @@ class CPUSection(Static):
                     continue
                 pct = per_core[idx]
                 history = list(self._core_history[idx])
-                segments = _mini_chart_segments(history, core_chart_w)
+                segments = _braille_per_core_chart(history, core_chart_w, theme)
                 line.append(f"C{idx:<2} ", style="dim")
                 for char, seg_color in segments:
-                    line.append(char, style="dim" if seg_color is None else seg_color)
+                    line.append(char, style=seg_color or "dim")
                 line.append(f" {pct:3.0f}%", style=_cpu_color(pct, theme))
             c_lines.append(line)
 
