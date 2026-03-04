@@ -1,7 +1,7 @@
 [project]
 name = "perf-glance"
 version = "0.1.0"
-description = "A terminal-based system utilization monitor for Linux"
+description = "A terminal-based, holistic system utilization monitor for Linux"
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [

@@ -111,6 +111,33 @@ def _resolve_uvx(parts: list[str]) -> str | None:
     return parts[i] if i < len(parts) else None
 
 
+def _strip_npm_scope(pkg: str) -> str:
+    """Strip npm scope prefix: @scope/name → name."""
+    if pkg.startswith("@") and "/" in pkg:
+        return pkg.split("/", 1)[1]
+    return pkg
+
+
+_NPM_FLAGS_WITH_VALUE: frozenset[str] = frozenset({"--workspace", "-w"})
+
+
+def _resolve_npm(parts: list[str]) -> str | None:
+    """npm run/exec/x <pkg> [args] — resolve to the actual command."""
+    if len(parts) < 3:
+        return None
+    sub = parts[1]
+    if sub in ("exec", "run", "x"):
+        i = _skip_flags(parts, 2, _NPM_FLAGS_WITH_VALUE)
+        return _strip_npm_scope(parts[i]) if i < len(parts) else None
+    return None
+
+
+def _resolve_npx(parts: list[str]) -> str | None:
+    """npx <pkg> [args] — direct package runner."""
+    i = _skip_flags(parts, 1)
+    return _strip_npm_scope(parts[i]) if i < len(parts) else None
+
+
 def _resolve_go_run(parts: list[str]) -> str | None:
     """go run [flags] <file/pkg> [args]"""
     if len(parts) < 3 or parts[1] != "run":
@@ -169,11 +196,22 @@ _LAUNCHER_RESOLVERS: dict[str, Callable[[list[str]], str | None]] = {
     # Package/task runners
     "uv":    _resolve_uv,
     "uvx":   _resolve_uvx,
+    "npm":   _resolve_npm,
+    "npx":   _resolve_npx,
     # JVM
     "java":  _resolve_java,
     # Go
     "go":    _resolve_go_run,
 }
+
+
+# Generic entry-point basenames that are not meaningful as process names.
+# When a launcher resolves to one of these, use the parent directory name.
+_GENERIC_ENTRYPOINTS: frozenset[str] = frozenset({
+    "index.js", "index.ts", "index.mjs", "index.cjs",
+    "main.js", "main.ts", "main.py", "__main__.py",
+    "cli.js", "cli.ts", "start.js", "run.js", "app.js",
+})
 
 
 def _effective_exe(proc: ProcLike, transparent_runtimes: set[str]) -> str:
@@ -196,12 +234,32 @@ def _effective_exe(proc: ProcLike, transparent_runtimes: set[str]) -> str:
         if cmdline:
             parts = cmdline.split()
             if len(parts) >= 2:
+                # Secondary dispatch: when the runtime (e.g. node) launched a
+                # different known tool as argv[0] (e.g. npm, npx), defer to
+                # that tool's resolver instead.  This handles cases like:
+                #   exe=node  cmdline="npm exec @upstash/context7-mcp"
+                # where _resolve_as_script would return "exec" but
+                # _resolve_npm correctly returns "context7-mcp".
+                argv0_base = parts[0].split("/")[-1].lower().rstrip(":,;")
+                if argv0_base != exe_lower:
+                    secondary = _LAUNCHER_RESOLVERS.get(argv0_base)
+                    if secondary is not None:
+                        resolver = secondary
                 result = resolver(parts)
                 if result:
-                    if "/" in result:
-                        result = result.split("/")[-1]
-                    cleaned = result.lower().rstrip(":,;")
-                    return cleaned or exe_lower
+                    # If the resolved name is a generic entry point (index.js,
+                    # main.py, etc.), use the parent directory name instead so
+                    # e.g. "node /path/lean-lsp-mcp/dist/index.js" → "lean-lsp-mcp".
+                    base = result.split("/")[-1].lower().rstrip(":,;") if "/" in result else result.lower().rstrip(":,;")
+                    if base in _GENERIC_ENTRYPOINTS and "/" in result:
+                        parts_path = result.split("/")
+                        # Walk back to find first non-generic directory component
+                        for part in reversed(parts_path[:-1]):
+                            if part and part not in ("dist", "build", "lib", "src", "out", "bin"):
+                                base = part.lower().rstrip(":,;")
+                                break
+                    cleaned = base or exe_lower
+                    return cleaned
     return exe_lower
 
 
@@ -302,8 +360,17 @@ def _ancestor_matches_app(
     terminal_exes: set[str],
     desktop_excluded: frozenset[str] = frozenset(),
 ) -> tuple[str, object] | None:
-    """Walk up tree; return (app_name, pattern) if any ancestor matches app."""
-    current = pid
+    """Walk up from PARENT; return (app_name, pattern) if any ancestor matches app.
+
+    Starting from the parent (not the process itself) ensures that when a process
+    directly matches an app pattern (e.g. codex), its own parent chain is checked
+    first — so a Cursor-extension codex is attributed to Cursor, not Codex.
+    A terminal exe in the chain cuts off the walk (returns None).
+    """
+    start = ppid_map.get(pid)
+    if not start or start == pid or start not in ppid_map:
+        return None
+    current = start
     seen: set[int] = set()
     while current and current not in seen:
         seen.add(current)
@@ -442,6 +509,16 @@ def group_processes(
     def is_assigned(pid: int) -> bool:
         return pid in pid_to_assignment
 
+    # Pids assigned to "agent"-family apps — Layer 2 must not reclaim these
+    # as tool groups, so that compilers/builds spawned by TUI agents stay
+    # attributed to the agent.
+    agent_pids: set[int] = set()
+
+    def _assign_app(pid: int, app_name: str, uid: int, pattern: object) -> None:
+        assign(pid, "app", f"{app_name}:{uid}")
+        if getattr(pattern, "family", "") == "agent":
+            agent_pids.add(pid)
+
     # Layer 1: Application recognition
     for proc in processes:
         pid = proc.pid
@@ -459,6 +536,22 @@ def group_processes(
         if exe in generic_set:
             continue
 
+        # Ancestor check FIRST: if this process lives inside a known app's
+        # subtree (walking up, stopping at terminal boundaries), attribute it
+        # to that ancestor app.  This ensures e.g. a Cursor-extension "codex"
+        # binary is kept under Cursor rather than stolen by an AppPattern for
+        # the standalone Codex CLI.
+        ancestor_match = _ancestor_matches_app(
+            pid, ppid_map, pid_to_proc, effective_exe_map,
+            app_patterns, exe_to_app, generic_set, terminal_exes,
+            desktop_excluded,
+        )
+        if ancestor_match:
+            app_name, anc_pattern = ancestor_match
+            _assign_app(pid, app_name, uid, anc_pattern)
+            continue
+
+        # Direct match on the process's own exe.
         match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
         if match:
             app_name, pattern = match
@@ -466,34 +559,20 @@ def group_processes(
                 family = getattr(pattern, "family", "") or ""
                 if family in ("electron", "chromium"):
                     if _is_electron_child(proc, getattr(pattern, "exe", "").lower()):
-                        assign(pid, "app", f"{app_name}:{uid}")
+                        _assign_app(pid, app_name, uid, pattern)
                         continue
                     root_exe = effective_exe_map.get(pid, exe)
                     if root_exe == getattr(pattern, "exe", "").lower():
-                        assign(pid, "app", f"{app_name}:{uid}")
+                        _assign_app(pid, app_name, uid, pattern)
                         continue
                 elif family == "gecko":
                     if _is_gecko_child(proc, getattr(pattern, "exe", "").lower()):
-                        assign(pid, "app", f"{app_name}:{uid}")
+                        _assign_app(pid, app_name, uid, pattern)
                         continue
                     if exe == getattr(pattern, "exe", "").lower():
-                        assign(pid, "app", f"{app_name}:{uid}")
+                        _assign_app(pid, app_name, uid, pattern)
                         continue
-            if match:
-                if exe in terminal_exes:
-                    assign(pid, "app", f"{app_name}:{uid}")
-                    continue
-                assign(pid, "app", f"{app_name}:{uid}")
-                continue
-
-        ancestor_match = _ancestor_matches_app(
-            pid, ppid_map, pid_to_proc, effective_exe_map,
-            app_patterns, exe_to_app, generic_set, terminal_exes,
-            desktop_excluded,
-        )
-        if ancestor_match:
-            app_name, _ = ancestor_match
-            assign(pid, "app", f"{app_name}:{uid}")
+            _assign_app(pid, app_name, uid, pattern or object())
             continue
 
         root = _get_tree_root(pid, ppid_map, name_map, generic_set)
@@ -505,19 +584,20 @@ def group_processes(
                 app_patterns, exe_to_app, desktop_excluded,
             )
             if root_match and root_match[0] and root_match[0] not in terminal_exes:
-                app_name = root_match[0]
-                assign(pid, "app", f"{app_name}:{uid}")
+                _assign_app(pid, root_match[0], uid, root_match[1] or object())
                 continue
 
         if exe in terminal_exes:
             match = _match_app(exe, cmdline, app_patterns, exe_to_app, desktop_excluded)
             if match:
-                assign(pid, "app", f"{match[0]}:{uid}")
+                _assign_app(pid, match[0], uid, match[1] or object())
                 continue
 
-    # Layer 2: Tool grouping (reclaims from Layer 1)
+    # Layer 2: Tool grouping (reclaims from Layer 1, but not agent app children)
     for proc in processes:
         pid = proc.pid
+        if pid in agent_pids:
+            continue
         exe = effective_exe_map[pid]
         uid = proc.uid
         tool_match = _match_tool(exe, tool_patterns)
@@ -682,6 +762,12 @@ def _build_hierarchy(
     tr = getattr(config, "transparent_runtimes", None) or []
     transparent_runtimes: set[str] = {str(r).lower() for r in (tr if isinstance(tr, list) else [])}
 
+    # Agent-family app names (TUI AI agents whose children should be labeled
+    # by effective exe, not by Electron process type).
+    agent_app_names = {
+        p.name.lower() for p in APP_PATTERNS if getattr(p, "family", "") == "agent"
+    }
+
     result: list[ProcessGroup] = []
     for g in groups:
         procs = g.processes or []
@@ -693,6 +779,13 @@ def _build_hierarchy(
                 children = _build_subgroups(
                     procs,
                     lambda p: _gecko_type_name(p.name or "", p.cmdline or ""),
+                    g.user, "app", ram_total_bytes,
+                )
+            elif g.name.lower() in agent_app_names:
+                # TUI agents: label children by the actual command they run
+                children = _build_subgroups(
+                    procs,
+                    lambda p, tr=transparent_runtimes: _effective_exe(p, tr) or _normalize_exe(p.exe or p.name or "unknown"),
                     g.user, "app", ram_total_bytes,
                 )
             else:

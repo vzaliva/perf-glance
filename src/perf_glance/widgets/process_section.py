@@ -99,16 +99,40 @@ class ProcessSection(Static):
             self._user_filter = None
             return False
 
+    @staticmethod
+    def _make_pid_leaves(g: ProcessGroup, display_depth: int) -> None:
+        """Populate g.children with per-PID leaf nodes (in-place)."""
+        for p in g.processes:
+            pid_label = f"PID {p.pid}"
+            exe = getattr(p, "exe", "") or getattr(p, "name", "") or ""
+            child_name = f"{pid_label}  {exe}" if exe else pid_label
+            rss = getattr(p, "rss_bytes", 0) or 0
+            g.children.append(ProcessGroup(
+                name=child_name,
+                proc_count=1,
+                cpu_pct=p.cpu_pct,
+                mem_bytes=rss,
+                mem_pct=0.0,
+                user=g.user,
+                category=g.category,
+                depth=display_depth + 1,
+            ))
+
     def _apply_expanded_state(self, groups: list[ProcessGroup]) -> None:
         """Restore expanded state from _expanded_state."""
-        def walk(gs: list[ProcessGroup]) -> None:
+        def walk(gs: list[ProcessGroup], depth: int) -> None:
             for g in gs:
                 key = (g.name.lower(), g.user or "")
                 if key in self._expanded_state:
-                    g.expanded = True
+                    # Recreate on-demand per-PID leaves if the group was
+                    # expanded without pre-built children (e.g. lean-lsp-mcp (2))
+                    if not g.children and g.processes and len(g.processes) > 1:
+                        self._make_pid_leaves(g, depth)
+                    if g.children:
+                        g.expanded = True
                 if g.children:
-                    walk(g.children)
-        walk(groups)
+                    walk(g.children, depth + 1)
+        walk(groups, 0)
 
     def _save_expanded_state(self, groups: list[ProcessGroup]) -> None:
         """Save expanded state to _expanded_state."""
@@ -154,21 +178,7 @@ class ProcessSection(Static):
             return False
         # If no pre-built children but has processes, create per-process leaf children
         if not g.children and g.processes and len(g.processes) > 1:
-            for p in g.processes:
-                pid_label = f"PID {p.pid}"
-                exe = getattr(p, "exe", "") or getattr(p, "name", "") or ""
-                child_name = f"{pid_label}  {exe}" if exe else pid_label
-                rss = getattr(p, "rss_bytes", 0) or 0
-                g.children.append(ProcessGroup(
-                    name=child_name,
-                    proc_count=1,
-                    cpu_pct=p.cpu_pct,
-                    mem_bytes=rss,
-                    mem_pct=0.0,
-                    user=g.user,
-                    category=g.category,
-                    depth=depth + 1,
-                ))
+            self._make_pid_leaves(g, depth)
         if g.children:
             g.expanded = True
             self._expanded_state.add((g.name.lower(), g.user or ""))

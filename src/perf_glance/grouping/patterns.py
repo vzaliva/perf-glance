@@ -55,6 +55,9 @@ APP_PATTERNS = [
     AppPattern(exe="spotify", name="Spotify", family="electron"),
     AppPattern(exe="obsidian", name="Obsidian", family="electron"),
     AppPattern(exe="claude", name="Claude", family="electron"),
+    # TUI AI agents — run in terminals, own their subprocesses (builds, tools)
+    AppPattern(exe="codex", name="Codex", family="agent"),
+    AppPattern(exe="cursor-agent", name="Cursor Agent", family="agent"),
     # Gecko (Firefox-based)
     AppPattern(exe="firefox", name="Firefox", family="gecko"),
     AppPattern(exe="thunderbird", name="Thunderbird", family="gecko"),

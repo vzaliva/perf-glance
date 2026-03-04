@@ -1,16 +1,24 @@
 # perf-glance
 
-A terminal-based system utilization monitor for Linux. Presents a holistic,
-hierarchical view of system activity, grouping processes by category (apps,
-build tools, system services) rather than raw process lists.
+A terminal-based system utilization monitor for Linux. Instead of hundreds of
+raw process names, you see **Firefox** (35 procs, 13G), **Cursor** (29 procs),
+**Slack**, **Discord** — apps, build tools, and system services grouped by
+category in an expandable hierarchy. Expand Firefox to see "Isolated Web Co
+(24)", "WebExtensions", "RDD Process"; expand Cursor for Main Process, Zygote,
+Utility. `.desktop` files and known patterns recognize apps automatically;
+interpreters like Python and Node are transparent — `python myscript.py` shows
+*myscript*, not *python3*.
+
+![perf-glance (left) vs top (right)](docs/perf-glance-vs-top.png)
 
 ## Features
 
 - CPU utilization with per-core bars and historical graph
 - CPU frequency and temperature (when available)
 - Memory (RAM and swap) with used/cached distinction
-- Process grouping: tree-based and binary-name grouping
+- Hierarchical process grouping with expand/collapse
 - Configurable refresh interval, sorting, and theme
+
 
 ## Quick Start
 
@@ -48,4 +56,11 @@ perf-glance --dump-groups > output.txt      # redirect if needed
 ## Configuration
 
 Config file: `~/.config/perf-glance/config.toml` (created with defaults on first run).
+
+## Disclaimer
+
+I vibe-coded this app with Claude Code. My goal was utilitarian: a tool I needed
+plus an exploration of user-friendly process classification - not polished code.
+However, I take full responsibility: I will maintain it, fix bugs, and welcome
+pull requests.
 
