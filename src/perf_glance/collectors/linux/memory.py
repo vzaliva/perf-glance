@@ -1,8 +1,9 @@
-"""Memory (RAM and swap) collector."""
+"""Memory (RAM and swap) collector (Linux via psutil)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+import psutil
 
 
 @dataclass
@@ -19,32 +20,17 @@ class MemorySnapshot:
     has_swap: bool
 
 
-def _parse_meminfo() -> dict[str, int]:
-    """Parse /proc/meminfo, return values in bytes (convert from kB)."""
-    result: dict[str, int] = {}
-    with open("/proc/meminfo") as f:
-        for line in f:
-            if ":" not in line:
-                continue
-            key, rest = line.split(":", 1)
-            key = key.strip()
-            val = rest.split()[0]
-            try:
-                result[key] = int(val) * 1024
-            except ValueError:
-                pass
-    return result
-
-
 def read_memory() -> MemorySnapshot:
-    """Read current memory and swap usage from /proc/meminfo."""
-    m = _parse_meminfo()
-    ram_total = m.get("MemTotal", 0)
-    ram_free = m.get("MemFree", 0)
-    buffers = m.get("Buffers", 0)
-    cached = m.get("Cached", 0)
-    swap_total = m.get("SwapTotal", 0)
-    swap_free = m.get("SwapFree", 0)
+    """Read current memory and swap usage via psutil."""
+    vm = psutil.virtual_memory()
+    sw = psutil.swap_memory()
+
+    ram_total = int(vm.total)
+    ram_free = int(vm.free)
+    buffers = int(getattr(vm, "buffers", 0))
+    cached = int(getattr(vm, "cached", 0))
+    swap_total = int(sw.total)
+    swap_free = int(sw.free)
 
     # Used = total - free - buffers - cached (matching 'free' command)
     ram_used = ram_total - ram_free - buffers - cached

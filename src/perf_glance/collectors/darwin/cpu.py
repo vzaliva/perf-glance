@@ -17,6 +17,14 @@ def read_cpu(previous: CPUSnapshot | None = None) -> CPUSnapshot:
         total = round(sum(ct) * 1_000_000)
         current_raw.append((idle, total))
 
+    per_core_freq = psutil.cpu_freq(percpu=True)
+    per_core_freq_ghz: list[float | None] | None = None
+    if per_core_freq:
+        per_core_freq_ghz = [
+            (f.current / 1000.0) if f is not None and f.current > 0 else None
+            for f in per_core_freq
+        ]
+
     freq = psutil.cpu_freq()
     frequency_ghz: float | None = None
     if freq is not None:
@@ -27,6 +35,7 @@ def read_cpu(previous: CPUSnapshot | None = None) -> CPUSnapshot:
             per_core_pct=[0.0] * len(current_raw),
             aggregate_pct=0.0,
             frequency_ghz=frequency_ghz,
+            per_core_freq_ghz=per_core_freq_ghz,
             _raw_times=current_raw,
         )
 
@@ -36,6 +45,7 @@ def read_cpu(previous: CPUSnapshot | None = None) -> CPUSnapshot:
             per_core_pct=[0.0] * len(current_raw),
             aggregate_pct=0.0,
             frequency_ghz=frequency_ghz,
+            per_core_freq_ghz=per_core_freq_ghz,
             _raw_times=current_raw,
         )
 
@@ -56,5 +66,6 @@ def read_cpu(previous: CPUSnapshot | None = None) -> CPUSnapshot:
         per_core_pct=per_core_pct,
         aggregate_pct=aggregate_pct,
         frequency_ghz=frequency_ghz,
+        per_core_freq_ghz=per_core_freq_ghz,
         _raw_times=current_raw,
     )

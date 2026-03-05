@@ -30,7 +30,7 @@ _BRAILLE_DOWN = (
 
 # Per-core right-panel layout per column: "C00 " + chart + " 100%"
 _LABEL_W = 4   # "C00 "
-_PCT_W   = 5   # " 100%"
+_METRIC_W = 11  # " 100% 5.1G"
 _GAP_W   = 2   # space between the two core columns
 # Fraction of terminal width given to the left aggregate graph
 _GRAPH_FRAC = 0.52
@@ -199,7 +199,7 @@ class CPUSection(Static):
         # Build left portion as plain string first to measure its length
         left_plain = "CPU"
         if show_freq and snapshot.frequency_ghz is not None:
-            left_plain += f"  {snapshot.frequency_ghz:.1f}GHz"
+            left_plain += f"  {snapshot.frequency_ghz:.1f}GHz avg"
         left_plain += f"  {snapshot.aggregate_pct:.0f}%"
 
         right_plain = ""
@@ -210,7 +210,7 @@ class CPUSection(Static):
 
         text.append("CPU", style=graph_color)
         if show_freq and snapshot.frequency_ghz is not None:
-            text.append(f"  {snapshot.frequency_ghz:.1f}GHz")
+            text.append(f"  {snapshot.frequency_ghz:.1f}GHz avg")
         text.append(f"  {snapshot.aggregate_pct:.0f}%")
         if right_plain:
             text.append(" " * gap)
@@ -228,8 +228,8 @@ class CPUSection(Static):
         graph_w = max(20, int(term_w * _GRAPH_FRAC))
         sep_w = 2                             # " │"
         cores_w = term_w - graph_w - sep_w
-        # Each core column: LABEL + chart + PCT; two columns + GAP
-        core_chart_w = max(6, (cores_w - 2 * _LABEL_W - 2 * _PCT_W - _GAP_W) // 2)
+        # Each core column: LABEL + chart + metrics; two columns + GAP
+        core_chart_w = max(6, (cores_w - 2 * _LABEL_W - 2 * _METRIC_W - _GAP_W) // 2)
 
         # ── Aggregate braille graph rows ───────────────────────────────────────
         g_lines = _braille_graph_lines(list(self._agg_history), graph_w, n_rows, theme)
@@ -244,15 +244,21 @@ class CPUSection(Static):
                 if col == 1:
                     line.append(" " * _GAP_W)
                 if idx >= n_cores:
-                    line.append(" " * (_LABEL_W + core_chart_w + _PCT_W))
+                    line.append(" " * (_LABEL_W + core_chart_w + _METRIC_W))
                     continue
                 pct = per_core[idx]
                 history = list(self._core_history[idx])
                 segments = _braille_per_core_chart(history, core_chart_w, theme)
+                freq_ghz = None
+                if snapshot.per_core_freq_ghz and idx < len(snapshot.per_core_freq_ghz):
+                    freq_ghz = snapshot.per_core_freq_ghz[idx]
                 line.append(f"C{idx:<2} ", style="dim")
                 for char, seg_color in segments:
                     line.append(char, style=seg_color or "dim")
-                line.append(f" {pct:3.0f}%", style=_cpu_color(pct, theme))
+                metrics = f" {pct:3.0f}%"
+                if show_freq and freq_ghz is not None:
+                    metrics += f" {freq_ghz:.1f}G"
+                line.append(f"{metrics:<{_METRIC_W}}", style=_cpu_color(pct, theme))
             c_lines.append(line)
 
         # ── Combine side by side ──────────────────────────────────────────────

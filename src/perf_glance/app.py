@@ -6,8 +6,8 @@ import pwd
 import os
 import signal
 import time
-from pathlib import Path
 from typing import cast
+import psutil
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
@@ -324,45 +324,39 @@ class PerfGlanceApp(App):
 
     @staticmethod
     def _read_status_map(pid: int) -> dict[str, str]:
-        """Read /proc/<pid>/status key-value fields."""
+        """Read selected process status fields via psutil."""
         out: dict[str, str] = {}
-        path = Path(f"/proc/{pid}/status")
-        if not path.exists():
-            return out
         try:
-            for line in path.read_text().splitlines():
-                if ":" not in line:
-                    continue
-                k, v = line.split(":", 1)
-                out[k.strip()] = v.strip()
-        except OSError:
-            return out
+            proc = psutil.Process(pid)
+            with proc.oneshot():
+                out["State"] = proc.status()
+                out["Threads"] = str(proc.num_threads())
+        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, OSError):
+            pass
         return out
 
     @staticmethod
     def _resolve_exe_path(pid: int) -> str:
-        """Resolve executable symlink for pid."""
+        """Resolve executable path for pid via psutil."""
         try:
-            return str(Path(f"/proc/{pid}/exe").resolve())
-        except (OSError, RuntimeError):
+            return psutil.Process(pid).exe()
+        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, OSError):
             return ""
 
     @staticmethod
     def _resolve_cwd_path(pid: int) -> str:
-        """Resolve current working directory symlink for pid."""
+        """Resolve current working directory for pid via psutil."""
         try:
-            return str(Path(f"/proc/{pid}/cwd").resolve())
-        except (OSError, RuntimeError):
+            return psutil.Process(pid).cwd()
+        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, OSError):
             return ""
 
     @staticmethod
     def _read_uptime_seconds() -> float | None:
-        """Read system uptime seconds from /proc/uptime."""
-        path = Path("/proc/uptime")
+        """Read system uptime seconds via psutil boot time."""
         try:
-            first = path.read_text().split()[0]
-            return float(first)
-        except (OSError, ValueError, IndexError):
+            return max(0.0, time.time() - psutil.boot_time())
+        except Exception:
             return None
 
     @staticmethod
@@ -381,8 +375,16 @@ class PerfGlanceApp(App):
         return f"{secs}s"
 
     @classmethod
-    def _process_age(cls, start_ticks: int) -> str:
-        """Compute process age from start ticks since boot."""
+    def _process_age(cls, pid: int, start_ticks: int) -> str:
+        """Compute process age via psutil create_time(), fallback to ticks."""
+        try:
+            created_at = psutil.Process(pid).create_time()
+            age = time.time() - created_at
+            if age >= 0:
+                return cls._format_duration(age)
+        except (psutil.NoSuchProcess, psutil.ZombieProcess, psutil.AccessDenied, OSError):
+            pass
+
         if start_ticks <= 0:
             return "?"
         uptime = cls._read_uptime_seconds()
@@ -423,7 +425,7 @@ class PerfGlanceApp(App):
         cpu_pct = float(getattr(proc, "cpu_pct", 0.0) or 0.0)
         rss = int(getattr(proc, "rss_bytes", 0) or 0)
         start_ticks = int(getattr(proc, "starttime_ticks", 0) or 0)
-        age = self._process_age(start_ticks)
+        age = self._process_age(pid, start_ticks)
 
         lines = [
             f"PID: {pid}    PPID: {ppid}    User: {user} ({uid})",

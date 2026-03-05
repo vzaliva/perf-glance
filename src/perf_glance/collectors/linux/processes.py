@@ -1,11 +1,13 @@
-"""Process list collector from /proc."""
+"""Process list collector from psutil (Linux)."""
 
 from __future__ import annotations
 
-import os
 import re
 from dataclasses import dataclass
-from pathlib import Path
+
+import psutil
+
+from perf_glance.psutil_linux import process_snapshot
 
 
 @dataclass
@@ -24,107 +26,42 @@ class ProcessInfo:
     exe_path: str = ""  # full resolved exe path (populated on macOS; empty on Linux)
 
 
-def _page_size() -> int:
-    """Return system page size in bytes."""
-    try:
-        return os.sysconf("SC_PAGESIZE")
-    except (AttributeError, ValueError):
-        return 4096
-
-
-def _parse_proc_stat(pid: int) -> tuple[str, int, int, int, int, int] | None:
-    """Parse /proc/<pid>/stat. Returns (comm, ppid, utime, stime, rss_bytes, starttime_ticks) or None."""
-    path = Path(f"/proc/{pid}/stat")
-    if not path.exists():
-        return None
-    try:
-        data = path.read_text()
-    except OSError:
-        return None
-    # Format: pid (comm) state ppid pgrp session ... utime stime ... vsize rss
-    # comm can contain spaces/parens; must extract rest after ") " to get correct field indices
-    match = re.match(r"(\d+)\s+\((.+)\)\s+\S+\s+(\d+)\s+", data)
-    if not match:
-        return None
-    comm = match.group(2)
-    ppid = int(match.group(3))
-    # Everything after ") state ppid " - split gives: pgrp, session, tty, tpgid, flags, minflt,
-    # cminflt, majflt, cmajflt, utime, stime, cutime, cstime, priority, nice, num_threads,
-    # itrealvalue, starttime, vsize, rss (indices 0-19)
-    rest = data[match.end() :].split()
-    if len(rest) < 20:
-        return None
-    try:
-        utime = int(rest[9])
-        stime = int(rest[10])
-        starttime_ticks = int(rest[17])
-        rss_pages = int(rest[19])  # rss in pages, NOT vsize (rest[18] which would be terabytes)
-    except (IndexError, ValueError):
-        return None
-    rss_bytes = rss_pages * _page_size()
-    return (comm, ppid, utime, stime, rss_bytes, starttime_ticks)
-
-
-def _read_status(pid: int) -> dict[str, str]:
-    """Read /proc/<pid>/status as key: value."""
-    path = Path(f"/proc/{pid}/status")
-    result: dict[str, str] = {}
-    if not path.exists():
-        return result
-    try:
-        for line in path.read_text().splitlines():
-            if ":" in line:
-                k, v = line.split(":", 1)
-                result[k.strip()] = v.strip()
-    except OSError:
-        pass
-    return result
-
-
-def _read_cmdline(pid: int) -> str:
-    """Read /proc/<pid>/cmdline, null bytes become spaces."""
-    path = Path(f"/proc/{pid}/cmdline")
-    if not path.exists():
-        return ""
-    try:
-        data = path.read_bytes()
-        return data.replace(b"\x00", b" ").decode("utf-8", errors="replace").strip()
-    except OSError:
-        return ""
-
-
 _VERSION_EXE_RE = re.compile(r"^\d+(\.\d+)+$")
 
 
-def _read_exe(pid: int) -> str:
-    """Read resolved exe path for process."""
-    try:
-        path = Path(f"/proc/{pid}/exe")
-        if not path.exists():
-            return ""
-        resolved = path.resolve()
-        name = resolved.name
-        # If basename is purely a version number (e.g. "2.1.63" from Claude desktop),
-        # use the grandparent directory name as the app name.
-        if _VERSION_EXE_RE.match(name):
-            grandparent = resolved.parent.parent.name
-            if grandparent and not _VERSION_EXE_RE.match(grandparent):
-                return grandparent
-        return name
-    except (OSError, PermissionError, RuntimeError):
+def _effective_exe(raw_exe: str) -> str:
+    """Return a clean exe name from a full path, applying version-number stripping."""
+    if not raw_exe:
         return ""
+    from pathlib import Path
+    p = Path(raw_exe)
+    name = p.name
+    if _VERSION_EXE_RE.match(name):
+        grandparent = p.parent.parent.name
+        if grandparent and not _VERSION_EXE_RE.match(grandparent):
+            return grandparent
+    return name
 
 
 def _list_pids() -> list[int]:
-    """List all numeric PIDs in /proc."""
-    pids: list[int] = []
-    proc = Path("/proc")
-    if not proc.exists():
-        return pids
-    for d in proc.iterdir():
-        if d.name.isdigit():
-            pids.append(int(d.name))
-    return pids
+    return psutil.pids()
+
+
+def _snapshot_pid(pid: int) -> dict[str, object]:
+    return process_snapshot(psutil.Process(pid))
+
+
+def _to_int(value: object, default: int = 0) -> int:
+    if not isinstance(value, (int, float, str, bytes, bytearray)):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_str(value: object) -> str:
+    return value if isinstance(value, str) else ""
 
 
 def read_processes(
@@ -134,7 +71,7 @@ def read_processes(
 ) -> tuple[list[ProcessInfo], dict[int, tuple[int, int]]]:
     """Read process list with CPU% (requires delta from previous read).
 
-    previous_cpu_total: sum of all CPU times from /proc/stat (aggregate)
+    previous_cpu_total: sum of all CPU times (aggregate)
     current_cpu_total: same from current read
     previous_per_pid: dict of pid -> (utime+stime, utime+stime+cutime+cstime) from last read
 
@@ -147,32 +84,32 @@ def read_processes(
     cpu_delta = current_cpu_total - previous_cpu_total
 
     for pid in pids:
-        stat = _parse_proc_stat(pid)
-        if stat is None:
+        try:
+            snap = _snapshot_pid(pid)
+        except (psutil.NoSuchProcess, psutil.ZombieProcess):
             continue
-        comm, ppid, utime, stime, rss_bytes, starttime_ticks = stat
-        status = _read_status(pid)
-        name = status.get("Name", comm)
-        cmdline = _read_cmdline(pid)
-        exe = _read_exe(pid)
+        except psutil.AccessDenied:
+            continue
+
+        name = _to_str(snap.get("name"))
+        ppid = _to_int(snap.get("ppid"))
+        cmdline = _to_str(snap.get("cmdline"))
+        exe_path = _to_str(snap.get("exe_path"))
+        exe = _effective_exe(exe_path)
         if not exe:
             # Prefer the longer of comm and cmdline basename to handle 15-char comm truncation
             # without regressing on symlink-named binaries (e.g. /sbin/init -> systemd)
             raw_cmdline_name = cmdline.split()[0].split("/")[-1] if cmdline else ""
             # Strip trailing punctuation that some daemons append (e.g. "avahi-daemon:")
             cmdline_name = raw_cmdline_name.rstrip(":,;")
-            comm_name = comm.strip("()")
-            exe = cmdline_name if len(cmdline_name) > len(comm_name) else comm_name
+            exe = cmdline_name if len(cmdline_name) > len(name) else name
         if "/" in exe:
             exe = exe.split("/")[-1]
 
-        uid_raw = status.get("Uid", "0").split()
-        try:
-            uid = int(uid_raw[0]) if uid_raw else 0
-        except (ValueError, IndexError):
-            uid = 0
-
-        total_time = utime + stime
+        uid = _to_int(snap.get("uid"))
+        total_time = _to_int(snap.get("total_time_ticks"))
+        rss_bytes = _to_int(snap.get("rss_bytes"))
+        starttime_ticks = _to_int(snap.get("starttime_ticks"))
         current_per_pid[pid] = (total_time, total_time)
 
         cpu_pct = 0.0
@@ -194,6 +131,7 @@ def read_processes(
                 cmdline=cmdline,
                 uid=uid,
                 starttime_ticks=starttime_ticks,
+                exe_path=exe_path,
             )
         )
 
@@ -201,16 +139,8 @@ def read_processes(
 
 
 def get_aggregate_cpu_times() -> float:
-    """Read /proc/stat aggregate cpu line, return total (user+nice+system+idle+...) in ticks."""
-    with open("/proc/stat") as f:
-        for line in f:
-            if line.startswith("cpu "):
-                parts = line.split()
-                total = 0
-                for i in range(1, min(11, len(parts))):
-                    try:
-                        total += int(parts[i])
-                    except ValueError:
-                        pass
-                return float(total)
-    return 0.0
+    """Return aggregate CPU time in pseudo-ticks (centiseconds)."""
+    try:
+        return float(sum(psutil.cpu_times()) * 100.0)
+    except Exception:
+        return 0.0

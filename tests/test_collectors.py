@@ -57,17 +57,27 @@ def test_get_aggregate_cpu_times() -> None:
 
 @pytest.mark.skipif(
     __import__("sys").platform != "linux",
-    reason="Linux-specific /proc monkeypatching",
+    reason="Linux-specific psutil-backed collector monkeypatching",
 )
 def test_read_processes_includes_starttime_ticks(monkeypatch: pytest.MonkeyPatch) -> None:
     """read_processes propagates starttime_ticks into ProcessInfo."""
     from perf_glance.collectors.linux import processes as proc_mod
 
     monkeypatch.setattr(proc_mod, "_list_pids", lambda: [123])
-    monkeypatch.setattr(proc_mod, "_parse_proc_stat", lambda _pid: ("bash", 1, 10, 5, 4096, 777))
-    monkeypatch.setattr(proc_mod, "_read_status", lambda _pid: {"Name": "bash", "Uid": "1000 1000 1000 1000"})
-    monkeypatch.setattr(proc_mod, "_read_cmdline", lambda _pid: "/usr/bin/bash -lc true")
-    monkeypatch.setattr(proc_mod, "_read_exe", lambda _pid: "bash")
+    monkeypatch.setattr(
+        proc_mod,
+        "_snapshot_pid",
+        lambda _pid: {
+            "name": "bash",
+            "ppid": 1,
+            "cmdline": "/usr/bin/bash -lc true",
+            "exe_path": "/usr/bin/bash",
+            "uid": 1000,
+            "total_time_ticks": 15,
+            "rss_bytes": 4096,
+            "starttime_ticks": 777,
+        },
+    )
 
     procs, _ = proc_mod.read_processes(100.0, 120.0, {123: (10, 10)})
     assert len(procs) == 1

@@ -24,7 +24,12 @@ def test_darwin_cpu_uses_psutil(monkeypatch: "pytest.MonkeyPatch") -> None:
     freq = SimpleNamespace(current=2400.0)
 
     monkeypatch.setattr(darwin_cpu.psutil, "cpu_times", lambda percpu=False: core_times)
-    monkeypatch.setattr(darwin_cpu.psutil, "cpu_freq", lambda: freq)
+    def fake_cpu_freq(percpu: bool = False):
+        if percpu:
+            return [freq, freq]
+        return freq
+
+    monkeypatch.setattr(darwin_cpu.psutil, "cpu_freq", fake_cpu_freq)
 
     snap1 = darwin_cpu.read_cpu(None)
     assert len(snap1.per_core_pct) == 2
