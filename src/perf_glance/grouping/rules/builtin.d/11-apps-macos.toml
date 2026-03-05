@@ -1,0 +1,118 @@
+schema_version = 1
+
+# Dropbox — file provider extension runs under launchd, not under the Dropbox tree
+[[app]]
+id = "app.dropboxfileprovider"
+exe = "dropboxfileprovider"
+name = "Dropbox"
+
+# Adobe Creative Cloud — each helper is launched by launchd independently
+[[app]]
+id = "app.adobe_cc"
+exe = "creative cloud"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_ui_helper"
+exe = "creative cloud ui helper"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_ui_helper_gpu"
+exe = "creative cloud ui helper (gpu)"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_ui_helper_renderer"
+exe = "creative cloud ui helper (renderer)"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_helper"
+exe = "creative cloud helper"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_desktop_service"
+exe = "adobe desktop service"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_ipc_broker"
+exe = "adobeipcbroker"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_core_sync"
+exe = "core sync"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_content_manager"
+exe = "creative cloud content manager.node"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_cc_libraries_sync"
+exe = "creative cloud libraries synchronizer"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_acc_installer"
+exe = "com.adobe.acc.installer.v2"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_armdc_comm"
+exe = "com.adobe.armdc.communicator"
+name = "Adobe Creative Cloud"
+
+[[app]]
+id = "app.adobe_armdc_smjob"
+exe = "com.adobe.armdc.smjobblesshelper"
+name = "Adobe Creative Cloud"
+
+# CleanMyMac X
+[[app]]
+id = "app.cleanmymac_menu"
+exe = "cleanmymac_5_menu"
+name = "CleanMyMac"
+
+[[app]]
+id = "app.cleanmymac_health"
+exe = "cleanmymac_5_healthmonitor"
+name = "CleanMyMac"
+
+# 1Password
+[[app]]
+id = "app.1password"
+exe = "1password"
+name = "1Password"
+
+[[app]]
+id = "app.1password_support"
+exe = "1password-browsersupport"
+name = "1Password"
+
+# Grammarly
+[[app]]
+id = "app.grammarly"
+exe = "grammarly desktop"
+name = "Grammarly"
+
+# Arq Backup
+[[app]]
+id = "app.arq"
+exe = "arqmonitor"
+name = "Arq Backup"
+
+# macOS terminals
+[[app]]
+id = "app.iterm2"
+exe = "iterm2"
+name = "iTerm2"
+
+[[app]]
+id = "app.terminal"
+exe = "terminal"
+name = "Terminal"

@@ -55,9 +55,13 @@ def test_get_aggregate_cpu_times() -> None:
     assert total >= 0
 
 
+@pytest.mark.skipif(
+    __import__("sys").platform != "linux",
+    reason="Linux-specific /proc monkeypatching",
+)
 def test_read_processes_includes_starttime_ticks(monkeypatch: pytest.MonkeyPatch) -> None:
     """read_processes propagates starttime_ticks into ProcessInfo."""
-    from perf_glance.collectors import processes as proc_mod
+    from perf_glance.collectors.linux import processes as proc_mod
 
     monkeypatch.setattr(proc_mod, "_list_pids", lambda: [123])
     monkeypatch.setattr(proc_mod, "_parse_proc_stat", lambda _pid: ("bash", 1, 10, 5, 4096, 777))

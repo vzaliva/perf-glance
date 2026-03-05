@@ -1,0 +1,103 @@
+schema_version = 1
+
+[[system_category]]
+id = "sys.macos_core"
+name = "macOS Core"
+exe = [
+  "kernel_task",
+  "launchd",
+  "sysmond",
+  "loginwindow",
+  "logd",
+  "notifyd",
+  "launchservicesd",
+]
+
+[[system_category]]
+id = "sys.macos_display"
+name = "Display Server"
+exe = [
+  "WindowServer",
+  "SkyLight",
+]
+
+[[system_category]]
+id = "sys.macos_services"
+name = "macOS Services"
+exe = [
+  # Finder / shell
+  "Finder",
+  "Dock",
+  "SystemUIServer",
+  "ControlCenter",
+  "NotificationCenter",
+  "Spotlight",
+  # Per-user session daemons
+  "distnoted",
+  "cfprefsd",
+  "UserEventAgent",
+  "universalaccessd",
+  "AXVisualSupportAgent",
+  "TextInputMenuAgent",
+  "WiFiAgent",
+  # Misc Apple user-space services
+  "sharingd",
+  "extensionkitservice",
+  "applespell",
+  "duetexpertd",
+  "nanoclaw",
+  "WeatherWidget",
+  "weatherwidget",
+  "helpd",
+  "nsattributedstringagent",
+]
+
+[[system_category]]
+id = "sys.macos_network"
+name = "macOS Network"
+exe = [
+  "configd",
+  "mDNSResponder",
+  "netbiosd",
+  "racoon",
+  "networkd",
+  "CommCenter",
+]
+
+[[system_category]]
+id = "sys.macos_security"
+name = "macOS Security"
+exe = [
+  "securityd",
+  "trustd",
+  "keybagd",
+  "coreauthd",
+  "authd",
+  "secd",
+  "syspolicyd",
+]
+
+[[system_category]]
+id = "sys.macos_storage"
+name = "macOS Storage"
+exe = [
+  "diskarbitrationd",
+  "fseventsd",
+  "mds",
+  "mds_stores",
+  "revisiond",
+  "nsurlsessiond",
+  "cloudphotod",
+  "corespotlightd",
+  "mdworker_shared",
+  "mediaanalysisd",
+]
+
+# Catch-all for com.apple.* helper processes not covered above
+[[system_category]]
+id = "sys.macos_apple"
+name = "macOS Services"
+exe_prefix = ["com.apple."]
+
+[list_patch]
+generic_parents_add = ["launchd", "loginwindow"]

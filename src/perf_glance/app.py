@@ -25,6 +25,9 @@ from perf_glance.collectors import (
 )
 from perf_glance.config import Config, load_config
 from perf_glance.grouping import group_processes
+import sys
+
+from perf_glance.grouping.app_bundles import update_bundle_map
 from perf_glance.grouping.desktop_entries import scan_desktop_entries
 from perf_glance.widgets import CPUSection, MemorySection, ProcessSection
 
@@ -115,8 +118,9 @@ class PerfGlanceApp(App):
         yield Footer(show_command_palette=False)
 
     def on_mount(self) -> None:
-        dirs = getattr(self._config.grouping, "desktop_dirs", []) or []
-        self._exe_to_app = scan_desktop_entries(dirs) if dirs else {}
+        if sys.platform != "darwin":
+            dirs = getattr(self._config.grouping, "desktop_dirs", []) or []
+            self._exe_to_app = scan_desktop_entries(dirs) if dirs else {}
         # Collect baseline for delta-based metrics (CPU% and process CPU%
         # both require two reads with a time gap to compute deltas).
         self._cpu_snapshot = read_cpu(None)
@@ -150,6 +154,8 @@ class PerfGlanceApp(App):
             self._prev_per_pid,
         )
         self._prev_cpu_total = cpu_total
+        if sys.platform == "darwin":
+            update_bundle_map(processes, self._exe_to_app)
 
         groups = group_processes(
             processes,

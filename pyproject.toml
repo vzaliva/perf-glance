@@ -1,13 +1,14 @@
 [project]
 name = "perf-glance"
 version = "0.2.0"
-description = "A terminal-based, holistic system utilization monitor for Linux"
+description = "A terminal-based, holistic system utilization monitor for Linux and macOS"
 readme = "README.md"
 requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -15,6 +16,7 @@ classifiers = [
 dependencies = [
     "textual>=0.40.0",
     "rich>=13.0.0",
+    "psutil>=5.9.0",
 ]
 
 [project.scripts]

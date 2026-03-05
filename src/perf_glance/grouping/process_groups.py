@@ -479,6 +479,8 @@ def group_processes(
     terminal_exes = {
         "wezterm-gui", "alacritty", "kitty", "gnome-terminal",
         "konsole", "xterm",
+        # macOS terminals
+        "iterm2", "terminal", "wezterm",
     }
 
     # Build set of all exe names claimed by system categories so Layer 1
