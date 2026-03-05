@@ -1,6 +1,6 @@
 # perf-glance
 
-A terminal-based system utilization monitor for Linux. Instead of
+A terminal-based system utilization monitor for Linux/MacOS. Instead of
 hundreds of raw process names, you see **Firefox** (35 procs, 13G),
 **Cursor** (29 procs), **Slack**, **Discord** — apps, build tools, and
 system services grouped by category in an expandable hierarchy. Expand
@@ -64,8 +64,6 @@ Config file: `~/.config/perf-glance/config.toml` (created with defaults on first
 Grouping rules: `~/.config/perf-glance/rules.d/*.toml` (see [docs/rules.md](docs/rules.md)).
 
 ## Disclaimers
-
-0. Linux-only; developed on Ubuntu - some behavior may be Ubuntu-specific
 
 1. UI was inspired by [btop](https://github.com/aristocratos/btop)
 
