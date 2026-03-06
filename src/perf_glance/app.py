@@ -213,7 +213,12 @@ class PerfGlanceApp(App):
         proc_widget.update_processes(groups, self._config.theme, visible_rows, sample_ts=self._last_sample_ts)
 
     def on_resize(self, event: Resize) -> None:
-        """Re-render all widgets after layout settles from terminal resize."""
+        """Re-render all widgets after layout settles from terminal resize.
+
+        Two nested call_after_refresh calls are required: the first fires after
+        the app-level layout pass, but child widget sizes are only updated after
+        a second layout pass completes.
+        """
         def _rerender() -> None:
             w = self.size.width or 0
             h = self.size.height or 0
@@ -227,7 +232,7 @@ class PerfGlanceApp(App):
                     widget.refresh(layout=True)
                 except Exception:
                     pass
-        self.call_after_refresh(_rerender)
+        self.call_after_refresh(lambda: self.call_after_refresh(_rerender))
 
     def action_refresh(self) -> None:
         """Force immediate refresh."""
