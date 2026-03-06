@@ -43,6 +43,7 @@ def _build_grouping_config(raw: dict) -> SimpleNamespace:
             name=str(item.get("name", "")),
             family=str(item.get("family", "")),
             cmdline=str(item.get("cmdline", "")),
+            no_tool_reclaim=bool(item.get("no_tool_reclaim", False)),
         )
         for item in raw.get("apps", [])
     ]

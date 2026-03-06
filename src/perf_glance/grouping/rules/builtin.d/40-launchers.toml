@@ -95,6 +95,7 @@ exe = "bash"
 kind = "first_non_flag"
 start_index = 1
 abort_flags = ["-c"]
+flags_with_value = ["-O", "-o", "--rcfile", "--init-file"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -105,6 +106,7 @@ exe = "sh"
 kind = "first_non_flag"
 start_index = 1
 abort_flags = ["-c"]
+flags_with_value = ["-o"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -115,6 +117,7 @@ exe = "dash"
 kind = "first_non_flag"
 start_index = 1
 abort_flags = ["-c"]
+flags_with_value = ["-o"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -125,6 +128,7 @@ exe = "zsh"
 kind = "first_non_flag"
 start_index = 1
 abort_flags = ["-c"]
+flags_with_value = ["-o"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 

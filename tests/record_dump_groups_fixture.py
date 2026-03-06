@@ -30,6 +30,7 @@ def _serialize_grouping_config(cfg: object) -> dict:
             "name": str(getattr(p, "name", "")),
             "family": str(getattr(p, "family", "")),
             "cmdline": str(getattr(p, "cmdline", "")),
+            "no_tool_reclaim": bool(getattr(p, "no_tool_reclaim", False)),
         })
 
     tools = []

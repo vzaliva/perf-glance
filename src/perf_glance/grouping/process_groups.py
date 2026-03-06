@@ -707,6 +707,7 @@ def _gecko_type_name(name: str, cmdline: str) -> str:
     return "Other"
 
 
+
 def _build_subgroups(
     procs: list,
     key_fn,
@@ -799,11 +800,40 @@ def _build_hierarchy(
                     g.user, "app", ram_total_bytes,
                 )
             else:
+                _pid_set = {p.pid for p in procs}
+                _local_ppid = {p.pid: p.ppid for p in procs}
+                _local_pmap = {p.pid: p for p in procs}
+                # Processes whose exe directly matches the app binary (e.g. cursor).
+                # We stop the sub-root walk when we'd walk into one of these.
+                _app_exe = _normalize_exe(procs[0].exe or "") if procs else ""
+                _app_root_pids = {
+                    p.pid for p in procs if _normalize_exe(p.exe or "") == _app_exe
+                }
+                def _electron_key(
+                    p,
+                    tr=transparent_runtimes, lr=launchers_by_exe,
+                    ps=_pid_set, lpp=_local_ppid, lpm=_local_pmap,
+                    app_root_pids=_app_root_pids, app_exe=_app_exe,
+                ):
+                    t = _electron_type_name(p.cmdline or "")
+                    if t != "Main Process":
+                        return t
+                    # Walk up to find sub-root: the highest ancestor still inside the
+                    # app's process set, stopping before the app's own binary pids.
+                    current = p.pid
+                    while True:
+                        ppid = lpp.get(current)
+                        if ppid is None or ppid not in ps or ppid in app_root_pids:
+                            break
+                        current = ppid
+                    root_proc = lpm.get(current, p)
+                    exe = _effective_exe(root_proc, tr, lr) or _normalize_exe(root_proc.exe or root_proc.name or "unknown")
+                    # Cursor/Electron main processes resolve to the app's own exe;
+                    # label them "Main Process" for consistency with Electron type names.
+                    return "Main Process" if exe == app_exe else exe
                 children = _build_subgroups(
-                    procs,
-                    lambda p: _electron_type_name(p.cmdline or ""),
-                    g.group_key,
-                    g.user, "app", ram_total_bytes,
+                    procs, _electron_key,
+                    g.group_key, g.user, "app", ram_total_bytes,
                 )
 
         elif g.category == "tool" and len(procs) > 1:
