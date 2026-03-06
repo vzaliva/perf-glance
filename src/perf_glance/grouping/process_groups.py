@@ -210,8 +210,8 @@ def _resolve_as_script_fallback(parts: list[str]) -> str | None:
         arg = parts[i]
         if arg == "-m" and i + 1 < len(parts):
             return _normalize_exe(parts[i + 1])
-        if arg == "-c":
-            return None
+        if arg == "-c" and i + 1 < len(parts):
+            return _normalize_exe(parts[i + 1])
         if arg.startswith("-"):
             i += 1
             continue
@@ -261,6 +261,24 @@ _VERSION_SUFFIX_RE = re.compile(r"[-_.]\d+(\.\d+)*$")
 def _strip_version_suffix(exe: str) -> str:
     """Strip version suffix like -30.2 or .3.12 from exe name."""
     return _VERSION_SUFFIX_RE.sub("", exe)
+
+
+def proc_label(p: object) -> str:
+    """Label for a single process: effective exe via launcher rules.
+
+    For processes where no launcher transformation occurs (e.g. cursor subprocesses),
+    appends the --type=xxx Electron flag so the label is distinguishable.
+    """
+    defaults = load_grouping_rules_cached()
+    raw_exe = _normalize_exe(getattr(p, "exe", "") or getattr(p, "name", "") or "")
+    exe = _effective_exe(p, set(defaults.transparent_runtimes), defaults.launchers_by_exe)
+    label = exe or raw_exe
+    if label == raw_exe:
+        cmdline = getattr(p, "cmdline", "") or ""
+        m = re.search(r"--type=(\S+)", cmdline)
+        if m:
+            label = f"{label} [{m.group(1)}]"
+    return label
 
 
 def _match_app(
@@ -697,43 +715,125 @@ def _electron_type_name(cmdline: str) -> str:
     return "Main Process"
 
 
+_GECKO_COMM_FIXUP: dict[str, str] = {
+    "Isolated Web Co": "Isolated Web Content",
+    "Isolated Servic": "Isolated Service",
+    "Privileged Cont": "Privileged Content",
+    "Utility Process": "Utility Process",
+}
+
+
 def _gecko_type_name(name: str, cmdline: str) -> str:
-    """Use process name (comm) for Gecko sub-type."""
+    """Use process name (comm) for Gecko sub-type, fixing truncated comm names."""
     name = (name or "").strip()
     if name:
-        return name
+        return _GECKO_COMM_FIXUP.get(name, name)
     if "-contentproc" in (cmdline or ""):
         return "Web Content"
     return "Other"
 
 
 
-def _build_subgroups(
+def _build_tree_subgroups(
     procs: list,
     key_fn,
     parent_group_key: str,
     user: str,
     category: str,
     ram_total_bytes: int,
+    skip_keys: frozenset[str] = frozenset(),
+    skip_root_keys: frozenset[str] = frozenset(),
 ) -> list[ProcessGroup]:
-    """Build sub-groups from processes using key_fn to classify each proc."""
-    by_key: dict[str, list] = {}
+    """Build hierarchical sub-groups following actual process tree.
+
+    Algorithm:
+    1. Build local tree from ppid links within the group
+    2. At each level, merge siblings with same key (from key_fn)
+    3. Chain-collapse: absorb same-key children into the parent node
+    4. Skip transparent nodes (skip_keys): promote their children at any level
+    5. Skip root-only nodes (skip_root_keys): promote their children only at root
+    6. Recurse into remaining different-key children
+    """
+    if not procs:
+        return []
+
+    pid_set = {p.pid for p in procs}
+    children_of: dict[int, list] = {}
+    roots: list = []
     for p in procs:
-        k = key_fn(p)
-        by_key.setdefault(k, []).append(p)
-    children: list[ProcessGroup] = []
-    for k, plist in by_key.items():
-        cpu = sum(p.cpu_pct for p in plist)
-        mem = sum(p.rss_bytes for p in plist)
-        mem_pct = 100.0 * mem / ram_total_bytes if ram_total_bytes else 0.0
-        sub_name = f"{k} ({len(plist)})" if len(plist) > 1 else k
-        children.append(ProcessGroup(
-            name=sub_name, proc_count=len(plist), cpu_pct=cpu,
-            mem_bytes=mem, mem_pct=mem_pct, user=user,
-            category=category, processes=plist, depth=1,
-            group_key=f"{parent_group_key}|sub:{str(k).strip().lower()}",
-        ))
-    return children
+        if p.ppid in pid_set and p.ppid != p.pid:
+            children_of.setdefault(p.ppid, []).append(p)
+        else:
+            roots.append(p)
+
+    def _expand_transparent(proc_list: list, also_skip: frozenset[str] = frozenset()) -> list:
+        """Replace transparent-key procs with their children, recursively."""
+        all_skip = skip_keys | also_skip
+        result: list = []
+        for p in proc_list:
+            if key_fn(p) in all_skip:
+                result.extend(_expand_transparent(children_of.get(p.pid, [])))
+            else:
+                result.append(p)
+        return result
+
+    def collect(proc_list: list, parent_key: str, is_root: bool = False) -> list[ProcessGroup]:
+        if not proc_list:
+            return []
+
+        # Expand any transparent nodes before grouping
+        # At root level, also expand skip_root_keys
+        extra = skip_root_keys if is_root else frozenset()
+        proc_list = _expand_transparent(proc_list, also_skip=extra)
+        if not proc_list:
+            return []
+
+        # Group siblings by key, preserving first-seen order
+        by_key: dict[str, tuple[list, list]] = {}
+        order: list[str] = []
+        for p in proc_list:
+            key = key_fn(p)
+            if key not in by_key:
+                by_key[key] = ([], [])
+                order.append(key)
+            own_procs, child_pool = by_key[key]
+            own_procs.append(p)
+            child_pool.extend(children_of.get(p.pid, []))
+
+        result: list[ProcessGroup] = []
+        for key in order:
+            own_procs, child_pool = by_key[key]
+
+            # Chain-collapse: absorb same-key children, promote grandchildren
+            same = [c for c in child_pool if key_fn(c) == key]
+            diff = [c for c in child_pool if key_fn(c) != key]
+            while same:
+                own_procs.extend(same)
+                next_gen: list = []
+                for c in same:
+                    next_gen.extend(children_of.get(c.pid, []))
+                same = [g for g in next_gen if key_fn(g) == key]
+                diff.extend(g for g in next_gen if key_fn(g) != key)
+
+            node_key = f"{parent_key}|sub:{key.strip().lower()}"
+            sub_children = collect(diff, node_key)
+
+            cpu = sum(getattr(p, "cpu_pct", 0) for p in own_procs)
+            mem = sum(getattr(p, "rss_bytes", 0) for p in own_procs)
+            mem_pct = 100.0 * mem / ram_total_bytes if ram_total_bytes else 0.0
+
+            name = f"{key} ({len(own_procs)})" if len(own_procs) > 1 else key
+
+            result.append(ProcessGroup(
+                name=name, proc_count=len(own_procs), cpu_pct=cpu,
+                mem_bytes=mem, mem_pct=mem_pct, user=user,
+                category=category, processes=own_procs,
+                children=sub_children, depth=0,
+                group_key=node_key,
+            ))
+        return result
+
+    return collect(roots, parent_group_key, is_root=True)
 
 
 def _build_hierarchy(
@@ -754,6 +854,16 @@ def _build_hierarchy(
         transparent_runtimes: set[str] = {str(r).lower() for r in transparent_runtimes_raw}
     else:
         transparent_runtimes = set(defaults.transparent_runtimes)
+
+    generic_parents_raw = getattr(config, "generic_parents", None)
+    if isinstance(generic_parents_raw, list) and generic_parents_raw:
+        generic_parents: set[str] = {str(p).lower() for p in generic_parents_raw}
+    else:
+        generic_parents = set(defaults.generic_parents)
+
+    # Keys that are transparent inside sub-group trees: don't create nodes,
+    # promote their children instead.
+    skip_keys: frozenset[str] = frozenset(generic_parents | transparent_runtimes)
 
     launchers_by_exe_raw = getattr(config, "launchers_by_exe", None)
     if isinstance(launchers_by_exe_raw, dict) and launchers_by_exe_raw:
@@ -784,72 +894,61 @@ def _build_hierarchy(
 
         if g.category == "app" and len(procs) > 1:
             exe_lower = (procs[0].exe or "").lower() if procs else ""
+            _app_exe = _normalize_exe(procs[0].exe or "") if procs else ""
             if any(x in exe_lower for x in ["firefox", "thunderbird", "librewolf"]):
-                children = _build_subgroups(
+                # Skip the app's own root process — it's redundant with the group
+                gecko_root_skip = frozenset({_app_exe}) if _app_exe else frozenset()
+                children = _build_tree_subgroups(
                     procs,
                     lambda p: _gecko_type_name(p.name or "", p.cmdline or ""),
                     g.group_key,
                     g.user, "app", ram_total_bytes,
+                    skip_keys=skip_keys,
+                    skip_root_keys=gecko_root_skip,
                 )
             elif g.name.lower() in agent_app_names:
-                # TUI agents: label children by the actual command they run
-                children = _build_subgroups(
+                children = _build_tree_subgroups(
                     procs,
                     lambda p, tr=transparent_runtimes, lr=launchers_by_exe: _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown"),
                     g.group_key,
                     g.user, "app", ram_total_bytes,
+                    skip_keys=skip_keys,
                 )
             else:
-                _pid_set = {p.pid for p in procs}
-                _local_ppid = {p.pid: p.ppid for p in procs}
-                _local_pmap = {p.pid: p for p in procs}
-                # Processes whose exe directly matches the app binary (e.g. cursor).
-                # We stop the sub-root walk when we'd walk into one of these.
-                _app_exe = _normalize_exe(procs[0].exe or "") if procs else ""
-                _app_root_pids = {
-                    p.pid for p in procs if _normalize_exe(p.exe or "") == _app_exe
-                }
                 def _electron_key(
                     p,
                     tr=transparent_runtimes, lr=launchers_by_exe,
-                    ps=_pid_set, lpp=_local_ppid, lpm=_local_pmap,
-                    app_root_pids=_app_root_pids, app_exe=_app_exe,
+                    app_exe=_app_exe,
                 ):
                     t = _electron_type_name(p.cmdline or "")
                     if t != "Main Process":
                         return t
-                    # Walk up to find sub-root: the highest ancestor still inside the
-                    # app's process set, stopping before the app's own binary pids.
-                    current = p.pid
-                    while True:
-                        ppid = lpp.get(current)
-                        if ppid is None or ppid not in ps or ppid in app_root_pids:
-                            break
-                        current = ppid
-                    root_proc = lpm.get(current, p)
-                    exe = _effective_exe(root_proc, tr, lr) or _normalize_exe(root_proc.exe or root_proc.name or "unknown")
-                    # Cursor/Electron main processes resolve to the app's own exe;
-                    # label them "Main Process" for consistency with Electron type names.
+                    exe = _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown")
                     return "Main Process" if exe == app_exe else exe
-                children = _build_subgroups(
+                # Skip "Main Process" at root — the app group already represents it
+                children = _build_tree_subgroups(
                     procs, _electron_key,
                     g.group_key, g.user, "app", ram_total_bytes,
+                    skip_keys=skip_keys,
+                    skip_root_keys=frozenset({"Main Process"}),
                 )
 
         elif g.category == "tool" and len(procs) > 1:
-            children = _build_subgroups(
+            children = _build_tree_subgroups(
                 procs,
-                lambda p: _normalize_exe(p.exe or p.name or "unknown"),
+                lambda p, tr=transparent_runtimes, lr=launchers_by_exe: _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown"),
                 g.group_key,
                 g.user, "tool", ram_total_bytes,
+                skip_keys=skip_keys,
             )
 
         elif g.category == "system" and len(procs) > 1 and g.name != "Kernel":
-            children = _build_subgroups(
+            children = _build_tree_subgroups(
                 procs,
                 lambda p, tr=transparent_runtimes, lr=launchers_by_exe: _effective_exe(p, tr, lr) or _normalize_exe(p.exe or p.name or "unknown"),
                 g.group_key,
                 g.user, "system", ram_total_bytes,
+                skip_keys=skip_keys,
             )
 
         expanded = (
@@ -919,6 +1018,7 @@ def _post_process_groups(
 
     if other:
         n = sum(g.proc_count for g in other)
+        all_procs = [p for g in other for p in (g.processes or [])]
         kept.append(ProcessGroup(
             name=f"other ({n})",
             proc_count=n,
@@ -927,6 +1027,8 @@ def _post_process_groups(
             mem_pct=sum(g.mem_pct for g in other),
             user="",
             category="other",
+            children=other,
+            processes=all_procs,
             group_key="other:bucket",
         ))
     return kept

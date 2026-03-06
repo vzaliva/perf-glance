@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.text import Text
 from textual.widgets import Static
 
-from perf_glance.grouping.process_groups import ProcessGroup
+from perf_glance.grouping.process_groups import ProcessGroup, proc_label
 from perf_glance.utils.humanize import bytes_to_human
 
 _STATE_PATH = Path.home() / ".config" / "perf-glance" / "state.json"
@@ -112,7 +112,7 @@ class ProcessSection(Static):
         """Populate g.children with per-PID leaf nodes (in-place)."""
         for p in g.processes:
             pid_label = f"PID {p.pid}"
-            exe = getattr(p, "exe", "") or getattr(p, "name", "") or ""
+            exe = proc_label(p)
             child_name = f"{pid_label}  {exe}" if exe else pid_label
             rss = getattr(p, "rss_bytes", 0) or 0
             g.children.append(ProcessGroup(
@@ -291,9 +291,16 @@ class ProcessSection(Static):
         self._scroll_to_cursor()
         self.refresh_display()
 
+    def _get_visible_rows(self) -> int:
+        """Get actual visible rows from widget size, falling back to stored value."""
+        h = getattr(self.size, "height", 0) or 0
+        if h > 2:
+            return h - 1  # subtract header row
+        return self._visible_rows
+
     def _scroll_to_cursor(self) -> None:
         """Adjust scroll so cursor stays visible."""
-        vr = self._visible_rows
+        vr = self._get_visible_rows()
         if self._cursor_index < self._scroll_offset:
             self._scroll_offset = self._cursor_index
         elif self._cursor_index >= self._scroll_offset + vr:
@@ -432,7 +439,8 @@ class ProcessSection(Static):
         else:
             self._recompute_cum_shares()
 
-        max_offset = max(0, len(self._flat_rows) - visible_rows)
+        actual_vr = self._get_visible_rows()
+        max_offset = max(0, len(self._flat_rows) - actual_vr)
         self._scroll_offset = min(self._scroll_offset, max_offset)
         self._cursor_index = min(self._cursor_index, max(0, len(self._flat_rows) - 1))
         self._scroll_to_cursor()
@@ -443,17 +451,17 @@ class ProcessSection(Static):
         """Render process list to Text and update widget."""
         if not self._groups:
             return
-        visible_rows = self._visible_rows
+        visible_rows = self._get_visible_rows()
         USER_WIDTH = 8
         PROCS_WIDTH = 6
         CPU_WIDTH = 6
         CUMCPU_WIDTH = 6
         MEMPCT_WIDTH = 5
         MEM_WIDTH = 7
-        # Command column: 32 by default, up to 64 when horizontal space allows
+        # Command column: fills remaining space after fixed columns, clamped 20..64
         fixed_width = USER_WIDTH + PROCS_WIDTH + CPU_WIDTH + CUMCPU_WIDTH + MEMPCT_WIDTH + MEM_WIDTH + 6  # 6 spaces between columns
         content_width = getattr(self.size, "width", 0) or 80
-        NAME_WIDTH = min(64, max(32, content_width - fixed_width))
+        NAME_WIDTH = min(64, max(20, content_width - fixed_width))
 
         proc_count_color = getattr(theme, "proc_count", "#4dd0e1")
         bracket_color = "white"

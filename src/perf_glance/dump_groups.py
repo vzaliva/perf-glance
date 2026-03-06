@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from typing import TextIO
 
-from perf_glance.grouping.process_groups import ProcessGroup
+from perf_glance.grouping.process_groups import ProcessGroup, proc_label
 from perf_glance.utils.humanize import bytes_to_human
 
 NAME_WIDTH = 32
@@ -14,28 +14,6 @@ PROCS_WIDTH = 6
 CPU_WIDTH = 6
 MEMPCT_WIDTH = 5
 MEM_WIDTH = 7
-
-
-def _proc_label(p: object) -> str:
-    """Label for a single process in per-PID leaves: effective exe via launcher rules.
-
-    For processes where no launcher transformation occurs (e.g. cursor subprocesses),
-    appends the --type=xxx Electron flag so the per-PID row is distinguishable.
-    """
-    import re
-    from perf_glance.grouping.process_groups import _effective_exe, _normalize_exe
-    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
-    defaults = load_grouping_rules_cached()
-    raw_exe = _normalize_exe(getattr(p, "exe", "") or getattr(p, "name", "") or "")
-    exe = _effective_exe(p, defaults.transparent_runtimes, defaults.launchers_by_exe)
-    label = exe or raw_exe
-    if label == raw_exe:
-        # No launcher transformation — try to show Electron --type= for context
-        cmdline = getattr(p, "cmdline", "") or ""
-        m = re.search(r"--type=(\S+)", cmdline)
-        if m:
-            label = f"{label} [{m.group(1)}]"
-    return label
 
 
 def _make_pid_leaves(g: ProcessGroup) -> None:
@@ -48,7 +26,7 @@ def _make_pid_leaves(g: ProcessGroup) -> None:
     if not procs:
         return
     for p in procs:
-        label = _proc_label(p)
+        label = proc_label(p)
         child_name = f"PID {p.pid}  {label}" if label else f"PID {p.pid}"
         g.children.append(ProcessGroup(
             name=child_name,
@@ -86,7 +64,7 @@ def _flatten_expanded(groups: list[ProcessGroup], depth: int = 0) -> list[tuple[
     return result
 
 
-def _format_row(g: ProcessGroup, depth: int) -> str:
+def _format_row(g: ProcessGroup, depth: int, name_width: int = NAME_WIDTH) -> str:
     """Format a single row as plain text (no ANSI)."""
     indent = "  " * depth
     if g.children:
@@ -95,9 +73,7 @@ def _format_row(g: ProcessGroup, depth: int) -> str:
         icon = "  "
     display_name = (g.name or "[other]").strip() or "[other]"
     name_part = indent + icon + display_name
-    if len(name_part) > NAME_WIDTH:
-        name_part = name_part[: NAME_WIDTH - 1] + "…"
-    name_part = name_part.ljust(NAME_WIDTH)
+    name_part = name_part.ljust(name_width)
     user_str = (g.user or "")[:USER_WIDTH].ljust(USER_WIDTH)
     procs_str = str(g.proc_count).rjust(PROCS_WIDTH)
     cpu_str = f"{g.cpu_pct:5.1f}".rjust(CPU_WIDTH)
@@ -129,12 +105,21 @@ def dump_group_tree(
     _expand_all(groups)
     flat = _flatten_expanded(groups)
 
+    # Compute name column width from actual content (no truncation)
+    name_width = len("Command")
+    for g, depth in flat:
+        indent = "  " * depth
+        icon = "▼ " if g.children else "  "
+        display_name = (g.name or "[other]").strip() or "[other]"
+        name_width = max(name_width, len(indent + icon + display_name))
+    name_width = max(name_width, NAME_WIDTH)
+
     lines: list[str] = []
-    lines.append("Command".ljust(NAME_WIDTH) + " " + "User".ljust(USER_WIDTH) + " " +
+    lines.append("Command".ljust(name_width) + " " + "User".ljust(USER_WIDTH) + " " +
                  "#Procs".rjust(PROCS_WIDTH) + " " + "Cpu%".rjust(CPU_WIDTH) + " " +
                  "Mem%".rjust(MEMPCT_WIDTH) + " " + "MemB".rjust(MEM_WIDTH))
-    lines.append("-" * (NAME_WIDTH + 1 + USER_WIDTH + 1 + PROCS_WIDTH + 1 + CPU_WIDTH + 1 + MEMPCT_WIDTH + 1 + MEM_WIDTH))
+    lines.append("-" * (name_width + 1 + USER_WIDTH + 1 + PROCS_WIDTH + 1 + CPU_WIDTH + 1 + MEMPCT_WIDTH + 1 + MEM_WIDTH))
     for g, depth in flat:
-        lines.append(_format_row(g, depth))
+        lines.append(_format_row(g, depth, name_width))
 
     print("\n".join(lines), file=file)

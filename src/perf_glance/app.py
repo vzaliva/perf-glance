@@ -12,6 +12,7 @@ import psutil
 from textual.app import App, ComposeResult
 from textual.containers import Container, Vertical
 from textual.binding import Binding
+from textual.events import Resize
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, Static
 
@@ -30,6 +31,9 @@ import sys
 from perf_glance.grouping.app_bundles import update_bundle_map
 from perf_glance.grouping.desktop_entries import scan_desktop_entries
 from perf_glance.widgets import CPUSection, MemorySection, ProcessSection
+
+MIN_WIDTH = 70
+MIN_HEIGHT = 15
 
 
 class ProcessInfoScreen(ModalScreen[None]):
@@ -139,6 +143,22 @@ class PerfGlanceApp(App):
         if self._iterations is not None and self._iteration_count >= self._iterations:
             self.exit()
             return
+
+        w = self.size.width or 0
+        h = self.size.height or 0
+        if w < MIN_WIDTH or h < MIN_HEIGHT:
+            msg = f"Terminal too small ({w}×{h}). Minimum: {MIN_WIDTH}×{MIN_HEIGHT}."
+            for widget_id in ("#cpu", "#memory", "#processes"):
+                try:
+                    self.query_one(widget_id, Static).update("")
+                except Exception:
+                    pass
+            try:
+                self.query_one("#cpu", Static).update(msg)
+            except Exception:
+                pass
+            return
+
         self._iteration_count += 1
 
         cpu_snap = read_cpu(self._cpu_snapshot)
@@ -191,6 +211,23 @@ class PerfGlanceApp(App):
         visible_rows = max(5, (proc_container.size.height or 10) - 2)
         self._last_sample_ts = time.monotonic()
         proc_widget.update_processes(groups, self._config.theme, visible_rows, sample_ts=self._last_sample_ts)
+
+    def on_resize(self, event: Resize) -> None:
+        """Re-render all widgets after layout settles from terminal resize."""
+        def _rerender() -> None:
+            w = self.size.width or 0
+            h = self.size.height or 0
+            if w < MIN_WIDTH or h < MIN_HEIGHT:
+                self._refresh()
+                return
+            for widget_id, cls in (("#cpu", CPUSection), ("#memory", MemorySection), ("#processes", ProcessSection)):
+                try:
+                    widget = self.query_one(widget_id, cls)
+                    widget.refresh_display()
+                    widget.refresh(layout=True)
+                except Exception:
+                    pass
+        self.call_after_refresh(_rerender)
 
     def action_refresh(self) -> None:
         """Force immediate refresh."""

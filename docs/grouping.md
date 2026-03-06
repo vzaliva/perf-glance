@@ -119,14 +119,42 @@ Remaining processes grouped by effective exe. Groups below `other_cpu_max` and
 
 ## Hierarchy and Expansion
 
-App groups with multiple processes get sub-groups:
+Groups with multiple processes get **deep hierarchical sub-trees** that follow
+actual `ppid` relationships, not just flat exe-keyed buckets. The algorithm:
 
-- **Electron/Chromium**: Main Process, Zygote, Utility, Web Content, GPU Process
-- **Gecko** (Firefox): uses process name (comm) — Isolated Web Co, Web
-  Content, WebExtensions, RDD Process, etc.
-- **Agent** apps: sub-groups by effective exe (e.g. lean-lsp-mcp, context7-mcp)
-- **Tools**: sub-groups by exe when > 1 process
-- **System**: sub-groups by effective exe
+1. **Local tree construction** — build a tree from ppid links within the group.
+2. **Transparent node skipping** — nodes whose key is in `skip_keys`
+   (generic parents + transparent runtimes: shells, systemd, forkserver, python,
+   node, etc.) are removed; their children are promoted to the parent level.
+   Additionally, `skip_root_keys` removes nodes only at the sub-tree root
+   (e.g. the app's own exe for Gecko, "Main Process" for Electron).
+3. **Sibling merging** — at each level, processes with the same key are merged
+   into a single node, their child pools combined.
+4. **Chain collapse** — if a child has the same key as its parent, it is
+   absorbed into the parent and its children are promoted (repeats until no
+   same-key children remain).
+5. **Recursion** — different-key children become nested sub-groups.
+
+### Key functions per family
+
+- **Electron/Chromium**: key = `--type=` flag (Utility, GPU Process, etc.) or
+  effective exe; `skip_root_keys = {"Main Process"}`.
+- **Gecko** (Firefox): key = process comm name (with truncation fixup for
+  kernel's 15-char limit); `skip_root_keys = {app_exe}`.
+- **Agent** apps: key = effective exe (via launcher rules).
+- **Tools / System**: key = effective exe (via launcher rules).
+
+### Gecko comm fixup
+
+The kernel truncates `comm` to 15 characters. Well-known Gecko names are
+corrected in code (e.g. "Isolated Web Co" → "Isolated Web Content").
+
+### "other" bucket
+
+Low-activity ungrouped processes are bucketed into "other (N)". This group
+is expandable — its children are the original per-exe groups.
+
+### UI controls
 
 Expand/collapse with Enter/→ and ←/Backspace. Expansion state is persisted.
 

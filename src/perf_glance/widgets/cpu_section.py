@@ -173,6 +173,18 @@ class CPUSection(Static):
         super().__init__(*args, **kwargs)
         self._agg_history: deque[float] = deque(maxlen=600)
         self._core_history: list[deque[tuple[float, str]]] = []
+        self._last_snapshot: CPUSnapshot | None = None
+        self._last_temp: float | None = None
+        self._last_theme: object = None
+        self._last_show_freq: bool = True
+        self._last_show_temp: bool = True
+
+    def refresh_display(self) -> None:
+        """Re-render from cached state (no new data collection)."""
+        if self._last_snapshot is None or self._last_theme is None:
+            return
+        self._repaint(self._last_snapshot, self._last_temp, self._last_theme,
+                      self._last_show_freq, self._last_show_temp)
 
     def update_cpu(
         self,
@@ -191,28 +203,39 @@ class CPUSection(Static):
             self._core_history[i].append((pct, _cpu_color(pct, theme)))
         self._agg_history.append(snapshot.aggregate_pct)
 
+        self._last_snapshot = snapshot
+        self._last_temp = temp
+        self._last_theme = theme
+        self._last_show_freq = show_freq
+        self._last_show_temp = show_temp
+        self._repaint(snapshot, temp, theme, show_freq, show_temp)
+
+    def _repaint(
+        self,
+        snapshot: CPUSnapshot,
+        temp: float | None,
+        theme: object,
+        show_freq: bool,
+        show_temp: bool,
+    ) -> None:
+        per_core = snapshot.per_core_pct
+        n_cores = len(per_core)
+
         text = Text()
         term_w = self.size.width if self.size and self.size.width > 0 else 80
         graph_color = getattr(theme, "cpu_graph", "#00bcd4")
 
         # ── Header (full width) ───────────────────────────────────────────────
-        # Build left portion as plain string first to measure its length
-        left_plain = "CPU"
+        text.append("CPU", style=graph_color)
         if show_freq and snapshot.frequency_ghz is not None:
-            left_plain += f"  {snapshot.frequency_ghz:.1f}GHz avg"
-        left_plain += f"  {snapshot.aggregate_pct:.0f}%"
+            text.append(f"  {snapshot.frequency_ghz:.1f}GHz (core avg),")
+        text.append(f"  {snapshot.aggregate_pct:.0f}%")
 
         right_plain = ""
         if show_temp and temp is not None:
             right_plain = f"Temp: {temp:.0f}°C"
-
-        gap = max(2, term_w - len(left_plain) - len(right_plain))
-
-        text.append("CPU", style=graph_color)
-        if show_freq and snapshot.frequency_ghz is not None:
-            text.append(f"  {snapshot.frequency_ghz:.1f}GHz avg")
-        text.append(f"  {snapshot.aggregate_pct:.0f}%")
         if right_plain:
+            gap = max(2, term_w - len(text.plain) - len(right_plain))
             text.append(" " * gap)
             text.append(right_plain, style=_temp_color(temp, theme))  # type: ignore[arg-type]
         text.append("\n")
@@ -225,11 +248,18 @@ class CPUSection(Static):
         n_rows = max(2, (n_cores + 1) // 2)  # rows of per-core display
         if n_rows % 2:                        # must be even for symmetric axis
             n_rows += 1
-        graph_w = max(20, int(term_w * _GRAPH_FRAC))
+        # At narrow widths, hide per-core frequency to save space
+        metric_w = _METRIC_W if show_freq else _METRIC_W - 5  # " 100%" vs " 100% 5.1G"
+        # Fixed overhead per core-panel row: 2*(label + metric) + gap
+        core_fixed = 2 * _LABEL_W + 2 * metric_w + _GAP_W
         sep_w = 2                             # " │"
-        cores_w = term_w - graph_w - sep_w
-        # Each core column: LABEL + chart + metrics; two columns + GAP
-        core_chart_w = max(6, (cores_w - 2 * _LABEL_W - 2 * _METRIC_W - _GAP_W) // 2)
+        # Compute graph and chart widths to fit within term_w
+        graph_w = max(10, int(term_w * _GRAPH_FRAC))
+        core_chart_w = max(4, (term_w - graph_w - sep_w - core_fixed) // 2)
+        # If charts are too small, shrink graph to give cores more space
+        if core_chart_w < 6 and graph_w > 16:
+            graph_w = max(16, term_w - sep_w - core_fixed - 2 * 6)
+            core_chart_w = max(4, (term_w - graph_w - sep_w - core_fixed) // 2)
 
         # ── Aggregate braille graph rows ───────────────────────────────────────
         g_lines = _braille_graph_lines(list(self._agg_history), graph_w, n_rows, theme)
@@ -244,21 +274,21 @@ class CPUSection(Static):
                 if col == 1:
                     line.append(" " * _GAP_W)
                 if idx >= n_cores:
-                    line.append(" " * (_LABEL_W + core_chart_w + _METRIC_W))
+                    line.append(" " * (_LABEL_W + core_chart_w + metric_w))
                     continue
                 pct = per_core[idx]
                 history = list(self._core_history[idx])
                 segments = _braille_per_core_chart(history, core_chart_w, theme)
                 freq_ghz = None
-                if snapshot.per_core_freq_ghz and idx < len(snapshot.per_core_freq_ghz):
+                if show_freq and snapshot.per_core_freq_ghz and idx < len(snapshot.per_core_freq_ghz):
                     freq_ghz = snapshot.per_core_freq_ghz[idx]
                 line.append(f"C{idx:<2} ", style="dim")
                 for char, seg_color in segments:
                     line.append(char, style=seg_color or "dim")
                 metrics = f" {pct:3.0f}%"
-                if show_freq and freq_ghz is not None:
+                if freq_ghz is not None:
                     metrics += f" {freq_ghz:.1f}G"
-                line.append(f"{metrics:<{_METRIC_W}}", style=_cpu_color(pct, theme))
+                line.append(f"{metrics:<{metric_w}}", style=_cpu_color(pct, theme))
             c_lines.append(line)
 
         # ── Combine side by side ──────────────────────────────────────────────

@@ -10,7 +10,7 @@ Vertical {
 }
 
 #memory {
-    min-height: 3;
+    min-height: 2;
     height: auto;
 }
 
@@ -26,6 +26,7 @@ Vertical {
 /* Process list row selection highlight (reverse style in Text handles most of it) */
 #processes {
     padding: 0 1;
+    height: 100%;
 }
 
 #process-filter {

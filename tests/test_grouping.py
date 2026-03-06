@@ -401,8 +401,17 @@ def test_other_bucket() -> None:
 
 # ── Hierarchy building ──────────────────────────────────────────────────
 
+def _count_tree_nodes(gs: list) -> int:
+    """Count total nodes in a ProcessGroup tree."""
+    n = 0
+    for g in gs:
+        n += 1
+        n += _count_tree_nodes(g.children)
+    return n
+
+
 def test_app_hierarchy_electron() -> None:
-    """Electron app group has children by subprocess type."""
+    """Electron app group builds a hierarchical sub-tree from child processes."""
     from perf_glance.grouping.process_groups import group_processes
 
     processes = [
@@ -415,11 +424,13 @@ def test_app_hierarchy_electron() -> None:
     groups = group_processes(processes, RAM, config, None)
     cursor = [g for g in groups if "cursor" in g.name.lower()]
     assert len(cursor) == 1
-    assert len(cursor[0].children) >= 3  # Main, Web Content, Utility, GPU
+    assert len(cursor[0].children) >= 1
+    # All child processes should appear somewhere in the tree
+    assert _count_tree_nodes(cursor[0].children) >= 3
 
 
 def test_app_hierarchy_gecko() -> None:
-    """Gecko app group has children by process name."""
+    """Gecko app group builds a hierarchical sub-tree from child processes."""
     from perf_glance.grouping.process_groups import group_processes
 
     processes = [
@@ -432,9 +443,9 @@ def test_app_hierarchy_gecko() -> None:
     groups = group_processes(processes, RAM, config, None)
     ff = [g for g in groups if "firefox" in g.name.lower()]
     assert len(ff) == 1
-    assert len(ff[0].children) >= 2  # Web Content, WebExtensions (+firefox main)
-    child_names = {c.name.split(" (")[0] for c in ff[0].children}
-    assert "Web Content" in child_names or any("Web Content" in n for n in child_names)
+    assert len(ff[0].children) >= 1
+    # All child processes should appear somewhere in the tree
+    assert _count_tree_nodes(ff[0].children) >= 2
 
 
 def test_tool_hierarchy() -> None:

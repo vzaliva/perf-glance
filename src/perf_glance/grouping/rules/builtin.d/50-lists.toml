@@ -18,6 +18,8 @@ generic_parents_add = [
   "screen",
   "env",
   "start-stop-daemon",
+  "forkserver",
+  "conmon",
 ]
 transparent_runtimes_add = [
   "python",

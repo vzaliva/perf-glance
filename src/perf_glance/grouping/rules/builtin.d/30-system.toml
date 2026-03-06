@@ -33,6 +33,7 @@ exe = [
   "rofi",
   "dmenu",
 ]
+exe_prefix = ["i3-"]
 
 [[system_category]]
 id = "sys.audio"
@@ -48,6 +49,7 @@ exe = [
   "sd_espeak-ng",
   "sd_dummy",
   "sd_openjtalk",
+  "rtkit-daemon",
 ]
 
 [[system_category]]
@@ -58,11 +60,14 @@ exe = [
   "networkmanager",
   "wpa_supplicant",
   "systemd-resolved",
+  "systemd-timesyncd",
   "openvpn",
   "proton.vpn.daemon",
   "wireguard",
   "dnsmasq",
   "avahi-daemon",
+  "sshd",
+  "modemmanager",
 ]
 
 [[system_category]]
@@ -84,7 +89,7 @@ exe = ["cupsd", "cups-browsed", "cups-lpd"]
 [[system_category]]
 id = "sys.file_services"
 name = "File Services"
-exe = ["udisksd", "tracker-miner", "tracker-extract", "baloo"]
+exe = ["udisksd", "tracker-miner", "tracker-extract", "baloo", "systemd-udevd", "fusermount3", "boltd"]
 exe_prefix = ["gvfsd", "gvfs-"]
 
 [[system_category]]
@@ -97,6 +102,7 @@ exe = [
   "gpg-agent",
   "ssh-agent",
   "pam",
+  "(sd-pam)",
   "at-spi-bus-launcher",
   "at-spi2-registryd",
   "xdg-permission-store",
@@ -109,6 +115,7 @@ name = "Session / Desktop"
 exe = [
   "systemd",
   "dbus-daemon",
+  "@dbus-daemon",
   "dconf-service",
   "xdg-desktop-portal",
   "xdg-desktop-portal-gtk",
@@ -124,12 +131,21 @@ exe = [
   "nm-applet",
   "colord",
   "gnome-remote-desktop-daemon",
+  "systemd-logind",
+  "accounts-daemon",
+  "power-profiles-daemon",
+  "switcheroo-control",
+  "upowerd",
+  "cron",
+  "atd",
+  "uuidd",
 ]
+exe_prefix = ["gdm"]
 
 [[system_category]]
 id = "sys.logging"
 name = "Logging / Monitoring"
-exe = ["rsyslogd", "systemd-journald", "kerneloops", "abrtd"]
+exe = ["rsyslogd", "systemd-journald", "kerneloops", "abrtd", "systemd-oomd"]
 
 [[system_category]]
 id = "sys.virtualization"
@@ -143,4 +159,6 @@ exe = [
   "containerd",
   "dockerd",
   "podman",
+  "conmon",
+  "systemd-machined",
 ]
