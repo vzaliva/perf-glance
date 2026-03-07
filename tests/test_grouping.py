@@ -670,3 +670,42 @@ def test_effective_exe_runtime_no_args() -> None:
     proc = MockProcess(1, 0, "python3", "python3", 0, 0, "python3")
     rules = load_grouping_rules_cached()
     assert _effective_exe(proc, {"python3"}, rules.launchers_by_exe) == "python3"
+
+
+def test_effective_exe_shell_dash_c_stays_shell_name() -> None:
+    """Shell -c payloads are snippets, not executable identities."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(1, 0, "bash", "bash", 0, 0, "bash -c 'snap=$(command -v snap); exec tree-sitter'")
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "bash"
+
+
+def test_effective_exe_fish_dash_c_stays_shell_name() -> None:
+    """fish -c payloads should not create synthetic group names."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(1, 0, "fish", "fish", 0, 0, "fish -c '2026.02.27-e7d2ef6 --worker'")
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "fish"
+
+
+def test_effective_exe_cursor_agent_versioned_index_js() -> None:
+    """cursor-agent path-based version folders should not become group names."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(
+        1,
+        0,
+        "MainThread",
+        "node",
+        0,
+        0,
+        "/home/lord/.local/bin/cursor-agent --use-system-ca "
+        "/home/lord/.local/share/cursor-agent/versions/2026.02.27-e7d2ef6/index.js",
+    )
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "cursor-agent"

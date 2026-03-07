@@ -92,12 +92,10 @@ generic_entrypoint_fallback = true
 id = "launcher.bash"
 exe = "bash"
 [[launcher.step]]
-kind = "next_after_flag"
-flag = "-c"
-[[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
-flags_with_value = ["-O", "-o", "--rcfile", "--init-file"]
+flags_with_value = ["-c", "-O", "-o", "--rcfile", "--init-file"]
+abort_flags = ["-c"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -105,12 +103,10 @@ generic_entrypoint_fallback = true
 id = "launcher.sh"
 exe = "sh"
 [[launcher.step]]
-kind = "next_after_flag"
-flag = "-c"
-[[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
-flags_with_value = ["-o"]
+flags_with_value = ["-c", "-o"]
+abort_flags = ["-c"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -118,12 +114,10 @@ generic_entrypoint_fallback = true
 id = "launcher.dash"
 exe = "dash"
 [[launcher.step]]
-kind = "next_after_flag"
-flag = "-c"
-[[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
-flags_with_value = ["-o"]
+flags_with_value = ["-c", "-o"]
+abort_flags = ["-c"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -131,12 +125,10 @@ generic_entrypoint_fallback = true
 id = "launcher.zsh"
 exe = "zsh"
 [[launcher.step]]
-kind = "next_after_flag"
-flag = "-c"
-[[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
-flags_with_value = ["-o"]
+flags_with_value = ["-c", "-o"]
+abort_flags = ["-c"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -144,11 +136,10 @@ generic_entrypoint_fallback = true
 id = "launcher.fish"
 exe = "fish"
 [[launcher.step]]
-kind = "next_after_flag"
-flag = "-c"
-[[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
+flags_with_value = ["-c"]
+abort_flags = ["-c"]
 [launcher.transform]
 generic_entrypoint_fallback = true
 
@@ -160,6 +151,16 @@ kind = "first_non_flag"
 start_index = 1
 [launcher.transform]
 generic_entrypoint_fallback = true
+
+[[launcher]]
+id = "launcher.cursor_agent"
+exe = "cursor-agent"
+[[launcher.step]]
+kind = "argv_at"
+index = 0
+[launcher.transform]
+basename = true
+lowercase = true
 
 [[launcher]]
 id = "launcher.ruby"
