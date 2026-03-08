@@ -6,6 +6,22 @@ id = "app.dropboxfileprovider"
 exe = "dropboxfileprovider"
 name = "Dropbox"
 
+# Adobe Lightroom Classic — helpers are launched independently by the main process
+[[app]]
+id = "app.lightroom_classic"
+exe = "adobe lightroom classic"
+name = "Adobe Lightroom Classic"
+
+[[app]]
+id = "app.lightroom_helper"
+exe = "adobe lightroom helper"
+name = "Adobe Lightroom Classic"
+
+[[app]]
+id = "app.lightroom_helper_gpu"
+exe = "adobe lightroom helper (gpu)"
+name = "Adobe Lightroom Classic"
+
 # Adobe Creative Cloud — each helper is launched by launchd independently
 [[app]]
 id = "app.adobe_cc"
