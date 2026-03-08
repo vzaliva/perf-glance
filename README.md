@@ -2,12 +2,12 @@
 
 A terminal-based system utilization monitor for Linux/MacOS. Instead of
 hundreds of raw process names, you see **Firefox** (35 procs, 13G),
-**Cursor** (29 procs), **Slack**, **Discord** — apps, build tools, and
+**Cursor** (29 procs), **Slack**, **Discord** - apps, build tools, and
 system services grouped by category in an expandable hierarchy. Expand
 Firefox to see "Isolated Web Co (24)", "WebExtensions", "RDD Process";
-expand Cursor for Main Process, Zygote, Utility. `.desktop` files and
+expand Cursor for "Main Process", "Zygote", "Utility". `.desktop` files and
 known patterns recognize apps automatically; interpreters like Python
-and Node are transparent — `python myscript.py` shows *myscript*, not
+and Node are transparent - `python myscript.py` shows *myscript*, not
 *python3*.
 
 See [docs/grouping.md](docs/grouping.md) for grouping internals and
@@ -23,14 +23,26 @@ Additional screenshots: [linux](docs/linux_screenshot.png), [mac](docs/mac_scree
 - CPU frequency and temperature (when available)
 - Memory (RAM and swap) with used/cached distinction
 - Hierarchical process grouping with expand/collapse
-- Configurable grouping rules via `rules.d` 
+- Configurable grouping rules via `rules.d`
 - Process table `Cum%` column: cumulative CPU share since reset
 - Configurable refresh interval, sorting, and theme
 
-
 ## Quick Start
 
-**One-liner (no install):** download the wrapper script and run:
+**1. uvx** (recommended; requires [uv](https://docs.astral.sh/uv/)):
+
+```sh
+uvx --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
+```
+
+**2. uv tool install** (using uv):
+
+```sh
+uv tool install --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
+perf-glance
+```
+
+**3. Curl fallback** (requires uv installed; fetches wrapper script, which uses uv on first run):
 
 ```sh
 curl -O https://raw.githubusercontent.com/vzaliva/perf-glance/main/perf-glance
@@ -38,26 +50,26 @@ chmod +x perf-glance
 ./perf-glance
 ```
 
-The script uses [uv](https://docs.astral.sh/uv/) to fetch and run perf-glance from GitHub on first use.
-
-Or via uvx (from GitHub, works without PyPI):
-
-```sh
-uvx --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
-```
-
-Or install and run:
-
-```sh
-uv tool install --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
-perf-glance
-```
-
 ## Contributing
 
-See [docs/TODO.md](docs/TODO.md) for a list of potential enhancements.
-Feel free to submit a pull request implementing any of them. Also see
-[docs/dev.md](docs/dev.md) for development hints.
+**1. Rules contributions** - We can't anticipate every process or app.
+If you don't like how something is grouped on your machine, the easiest
+way to tweak it is via `rules.d` (see [docs/rules.md](docs/rules.md)) -
+no coding required. To share your rules, submit a PR with new rule files
+in `rules/builtin.d/`.
+
+AI coding agents like Claude Code work well for generating rules. Example
+prompt:
+
+> Run `perf-glance --dump-groups` and examine its output for grouping
+> improvements. For unrecognized processes, look up system package info and web
+> documentation to suggest better grouping. Do not modify Python code - only
+> produce new `.toml` files in `rules/builtin.d/`. Files load in lexicographic
+> order, so name them to fit alongside existing definitions.
+
+**2. Code contributions** - See [docs/TODO.md](docs/TODO.md) for potential
+enhancements and [docs/dev.md](docs/dev.md) for development hints. Pull
+requests welcome.
 
 ## Configuration
 
