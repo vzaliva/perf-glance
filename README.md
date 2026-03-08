@@ -15,7 +15,7 @@ See [docs/grouping.md](docs/grouping.md) for grouping internals and
 
 Screenshot: **perf-glance** (left) vs **top** (right):
 ![perf-glance (left) vs top (right)](docs/perf-glance-vs-top.png)
-Additional screenshots: [linux](docs/linux_screenshot.png), [mac](mac_screenshot.png)
+Additional screenshots: [linux](docs/linux_screenshot.png), [mac](docs/mac_screenshot.png)
 
 ## Features
 

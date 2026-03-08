@@ -156,7 +156,7 @@ is expandable — its children are the original per-exe groups.
 
 ### UI controls
 
-Expand/collapse with Enter/→ and ←/Backspace. Expansion state is persisted.
+Expand/collapse with →/← (Backspace also collapses). Enter opens process info. Expansion state is persisted.
 
 ## Configuration
 
