@@ -497,7 +497,18 @@ def _compile(state: _RawState) -> CompiledRules:
 
 
 def _builtin_rules_dir() -> Path:
-    return Path(__file__).resolve().parent / "rules" / "builtin.d"
+    # Installed wheel: force-include puts rules alongside this file
+    pkg_dir = Path(__file__).resolve().parent / "rules" / "builtin.d"
+    if pkg_dir.is_dir():
+        return pkg_dir
+    # Development / editable install: rules live at project root
+    p = Path(__file__).resolve().parent
+    while p != p.parent:
+        candidate = p / "rules" / "builtin.d"
+        if candidate.is_dir() and (p / "pyproject.toml").exists():
+            return candidate
+        p = p.parent
+    return pkg_dir  # fallback
 
 
 def _iter_rule_files(base: Path) -> list[Path]:

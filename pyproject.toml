@@ -29,6 +29,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/perf_glance"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"rules/builtin.d" = "perf_glance/grouping/rules/builtin.d"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
