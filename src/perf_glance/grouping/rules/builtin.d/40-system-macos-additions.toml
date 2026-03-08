@@ -1,0 +1,306 @@
+schema_version = 1
+
+# ─── Desktop additions ──────────────────────────────────────────────────────
+# More widget extensions and wallpaper extension processes not caught by the
+# main macOS Desktop rule (same name → they merge in the display).
+[[system_category]]
+id = "sys.macos_desktop_widgets"
+name = "macOS Desktop"
+exe = [
+  # Calendar / Reminders / Contacts widgets
+  "CalendarWidgetExtension",
+  "calendarwidgetextension",
+  "RemindersWidgetExtension",
+  "reminderswidgetextension",
+  "PeopleWidget_macOSExtension",
+  "peoplewidget_macosextension",
+  "PhotosReliveWidget",
+  "photosrelivewidget",
+  "TipsWidgetExtension",
+  "tipswidgetextension",
+
+  # Safari link/extension helpers (used by widget host)
+  "SafariWidgetExtension",
+  "safariwidgetextension",
+  "SafariLinkExtension",
+  "safarilinkextension",
+
+  # Wallpaper extension host processes (macOS Sonoma+)
+  "WallpaperLegacyExtension",
+  "wallpaperlegacyextension",
+  "WallpaperDynamicExtension",
+  "wallpaperdynamicextension",
+  "WallpaperImageExtension",
+  "wallpaperimageextension",
+  "WallpaperAerialsExtension",
+  "wallpaperaerialsextension",
+  "WallpaperGradientExtension",
+  "wallpapergradientextension",
+  "WallpaperSequoiaExtension",
+  "wallpapersequoiaextension",
+  "WallpaperMacintoshExtension",
+  "wallpapermacintoshextension",
+  "WallpaperSonomaExtension",
+  "wallpapersonomaextension",
+  "WallpaperControlsExtension",
+  "wallpapercontrolsextension",
+  "NeptuneOneWallpaper",
+  "neptuneonewallpaper",
+
+  # Thumbnail / quick-look helpers
+  "ImageThumbnailExtension",
+  "imagethumbnailextension",
+  "ViewBridgeAuxiliary",
+  "viewbridgeauxiliary",
+
+  # Tips / onboarding
+  "tipsd",
+
+  # Background task management (macOS 13+)
+  "BackgroundTaskManagementAgent",
+  "backgroundtaskmanagementagent",
+  "backgroundtaskmanagementd",
+
+  # Image Capture helper
+  "icdd",
+
+  # Contacts CoreSpotlight indexer (desktop-level extension)
+  "ContactsCoreSpotlightExtension",
+  "contactscorespotlightextension",
+]
+
+# ─── AI additions ───────────────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_ai_ext"
+name = "macOS Siri & AI"
+exe = [
+  # Siri analytics / suggestions bookkeeping
+  "SAExtensionOrchestrator",
+  "saextensionorchestrator",
+  "SiriSuggestionsBookkeepingService",
+  "sirisuggestionsbookkeepingservice",
+
+  # Generative safety inference (Apple Intelligence content policy)
+  "GenerativeExperiencesSafetyInferenceProvider",
+  "generativeexperiencessafetyinferenceprovider",
+
+  # Apple Neural Engine / on-device inference
+  "TGOnDeviceInferenceProviderService",
+  "tgondeviceinferenceproviderservice",
+  "aneuserd",
+  "aned",
+  "modelmanagerd",
+  "modelcatalogd",
+  "ANECompilerService",
+  "anecompilerservice",
+
+  # DAScheduler — schedules intelligence workloads
+  "dasd",
+
+  # On-device translation
+  "translationd",
+
+  # Recents / content linking (used by Siri & Spotlight suggestions)
+  "recentsd",
+  "contentlinkingd",
+]
+
+# ─── Security additions ─────────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_security_ext2"
+name = "macOS Security"
+exe = [
+  # XProtect malware scanner
+  "xprotectd",
+  "XprotectService",
+  "xprotectservice",
+  "XProtectBridgeService",
+  "xprotectbridgeservice",
+
+  # Application Firewall
+  "socketfilterfw",
+
+  # Biometric kit
+  "biometrickitd",
+  "biometrickitagent",
+
+  # Apple Mobile File Integrity (code signing enforcement)
+  "amfid",
+
+  # Endpoint Security framework
+  "endpointsecurityd",
+
+  # Sandbox daemon
+  "sandboxd",
+
+  # Security daemon (system-level)
+  "securityd_system",
+
+  # Security Extension Service
+  "seserviced",
+
+  # Assessment agent (Gatekeeper)
+  "assessmentagent",
+]
+
+# ─── Network additions ──────────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_network_ext2"
+name = "macOS Network"
+exe = [
+  # AirPort / WiFi driver daemon
+  "airportd",
+
+  # WiFi velocity / peering
+  "wifivelocityd",
+  "wifip2pd",
+
+  # Bluetooth
+  "bluetoothuserd",
+  "bluetoothd",
+  "nearbyd",
+
+  # Location daemon (system-level)
+  "locationd",
+
+  # NFC
+  "nfcd",
+
+  # Network helper (NetworkExtension)
+  "nehelper",
+
+  # Wireless Radio Manager
+  "WirelessRadioManagerd",
+  "wirelessradiomanagerd",
+]
+
+# ─── Storage additions ──────────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_storage_ext"
+name = "macOS Storage"
+exe = [
+  # StorageKit (disk management)
+  "storagekitd",
+
+  # FSKit (file system kit agent)
+  "fskit_agent",
+  "fskitd",
+
+  # Time Machine
+  "backupd",
+  "backupd-helper",
+
+  # Mobile asset delivery
+  "mobileassetd",
+
+  # Asset subscription (system updates, OTA content)
+  "assetsubscriptiond",
+  "AssetCache",
+  "assetcache",
+
+  # Cache deletion
+  "deleted",
+  "deleted_helper",
+
+  # Container metadata extractor (iCloud Drive)
+  "ContainerMetadataExtractor",
+  "containermetadataextractor",
+  "containermanagerd",
+]
+
+# ─── Core system additions ──────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_core_ext"
+name = "macOS Core"
+exe = [
+  # Rosetta translation runtime (Apple Silicon)
+  "oahd",
+
+  # Running board (process lifecycle)
+  "runningboardd",
+
+  # Power management
+  "powerd",
+  "PowerUIAgent",
+  "poweruiagent",
+  "powerexperienced",
+  "powerdatad",
+  "thermalmonitord",
+  "corebrightnessd",
+
+  # MetricKit (performance telemetry)
+  "metrickitd",
+
+  # Analytics / telemetry
+  "analyticsagent",
+  "analyticsd",
+  "ecosystemanalyticsd",
+  "feedbackd",
+  "diagnosticservicesd",
+  "rtcreportingd",
+  "PerfPowerServices",
+  "perfpowerservices",
+  "PerfPowerTelemetryClientRegistrationService",
+  "perfpowertelemetryclientregistrationservice",
+
+  # Crash / diagnostics
+  "spindump",
+  "spindump_agent",
+  "CrashReporterSupportHelper",
+  "crashreportersupporthelper",
+  "SubmitDiagInfo",
+  "submitdiaginfo",
+  "ReportSystemMemory",
+  "reportsystemmemory",
+
+  # Ecosystem continuity (Handoff / Universal Clipboard backend)
+  "ecosystemd",
+
+  # Software update (system-level)
+  "softwareupdated",
+  "suhelperd",
+  "system_installd",
+  "installd",
+
+  # Open Directory
+  "opendirectoryd",
+  "logind",
+  "dirhelper",
+
+  # Kernel / OS support
+  "KernelEventAgent",
+  "kerneleventagent",
+  "kernelmanagerd",
+  "sysextd",
+  "syslogd",
+  "logd_helper",
+  "runningboardd",
+
+  # Metal shader compiler (GPU)
+  "MTLCompilerService",
+  "mtlcompilerservice",
+  "MTLAssetUpgraderD",
+  "mtlassetupgraderd",
+  "CVMServer",
+  "cvmserver",
+]
+
+# ─── Media additions ────────────────────────────────────────────────────────
+[[system_category]]
+id = "sys.macos_media_ext"
+name = "macOS Media"
+exe = [
+  # Camera / video capture
+  "VDCAssistant",
+  "vdcassistant",
+  "UVCAssistant",
+  "uvcassistant",
+  "cameracaptured",
+
+  # MediaExtension notification agent
+  "MENotificationAgent",
+  "menotificationagent",
+
+  # Weather (live data service behind WeatherWidget)
+  "weatherd",
+]

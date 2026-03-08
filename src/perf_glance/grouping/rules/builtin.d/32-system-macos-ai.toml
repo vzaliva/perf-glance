@@ -1,0 +1,66 @@
+schema_version = 1
+
+# Siri, Apple Intelligence, and on-device ML daemons.
+# These are standalone processes (no com.apple. prefix) so they fall through
+# the com.apple.* catch-all and end up in "other" without this rule.
+[[system_category]]
+id = "sys.macos_siri_ai"
+name = "macOS Siri & AI"
+exe = [
+  # Core Siri
+  "assistantd",
+  "siriactionsd",
+  "siriinferenced",
+  "sirincservice",
+  "siriknowledged",
+  "siriausp",
+  "Siri",
+  "siri",
+  "assistant_cdmd",
+
+  # Proactive / suggestions
+  "suggestd",
+  "parsecd",
+  "routined",
+  "biomed",
+  "biomeagent",
+  "coreduetd",
+  "contextstoreagent",
+  "contextstored",
+  "usagetrackingagent",
+
+  # Apple Intelligence / NLP
+  "intelligenceplatformd",
+  "intelligenceplatformcomputeservice",
+  "intelligencecontextd",
+  "generativeexperiencesd",
+  "naturallanguaged",
+  "textunderstandingd",
+  "knowledgeconstructor",
+  "knowledge-agent",
+  "spotlightknowledged",
+  "mlhostd",
+  "privatecloudcomputed",
+
+  # Speech synthesis and recognition
+  "corespeechd",
+  "heard",
+  "voicebankingd",
+  "wardasynthesizer",
+  "konasynthesizer",
+  "macintalkausp",
+  "mauiausp",
+
+  # Telemetry ingestors for intelligence features
+  "biomeselfingestor",
+  "gmsselfingestor",
+  "iftelemetryselfingestor",
+  "iftranscriptselfingestor",
+
+  # App intent prediction
+  "apppredictionintentshelperservice",
+
+  # Knowledge construction (Spotlight/Siri knowledge graph builder)
+  "knowledgeconstructiond",
+  "knowledgeconstructor",
+]

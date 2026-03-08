@@ -1,0 +1,86 @@
+schema_version = 1
+
+# macOS Virtualization.framework VM process — takes significant RAM when running
+# guest VMs.  It is normally swallowed by the com.apple.* catch-all in
+# sys.macos_apple; category_override runs first and gives it its own visible group.
+[[category_override]]
+id = "override.mac.virt.vm"
+exe = "com.apple.virtualization.virtualmachine"
+category = "macOS Virtualization"
+
+# Pull Finder, Dock, Spotlight, SystemUIServer, ControlCenter, NotificationCenter
+# out of the generic sys.macos_services bucket and into the more descriptive
+# macOS Desktop category (sys.macos_services is checked first in the loop, so we
+# need category_override to win before the loop runs).
+[[category_override]]
+id = "override.mac.desktop.finder"
+exe = "finder"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.dock"
+exe = "dock"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.systemuiserver"
+exe = "systemuiserver"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.controlcenter"
+exe = "controlcenter"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.notificationcenter"
+exe = "notificationcenter"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.spotlight"
+exe = "spotlight"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.textinputmenuagent"
+exe = "textinputmenuagent"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.axvisualsupportagent"
+exe = "axvisualsupportagent"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.weatherwidget"
+exe = "weatherwidget"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.universalaccessd"
+exe = "universalaccessd"
+category = "macOS Desktop"
+
+[[category_override]]
+id = "override.mac.desktop.usereventagent"
+exe = "usereventagent"
+category = "macOS Desktop"
+
+# sharingd handles AirDrop / file sharing — belongs in Network, not generic Services
+[[category_override]]
+id = "override.mac.network.sharingd"
+exe = "sharingd"
+category = "macOS Network"
+
+# duetexpertd is the on-device ML scheduler for Siri Proactive / suggestions
+[[category_override]]
+id = "override.mac.ai.duetexpertd"
+exe = "duetexpertd"
+category = "macOS Siri & AI"
+
+# wifiagent is a user-session WiFi menu-bar agent — belongs in Network
+[[category_override]]
+id = "override.mac.network.wifiagent"
+exe = "wifiagent"
+category = "macOS Network"

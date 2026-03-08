@@ -1,0 +1,191 @@
+schema_version = 1
+
+# Window manager, Dock, wallpaper, accessibility, input, and desktop UI daemons.
+[[system_category]]
+id = "sys.macos_desktop"
+name = "macOS Desktop"
+exe = [
+  # Window server / compositor
+  "WindowServer",
+  "windowserver",
+  "uikitsystemapp",
+  "coreservicesuiagent",
+
+  # Dock and Finder UI helpers
+  "wallpaperagent",
+  "dockhelper",
+  "DockHelper",
+  "dockcontrols",
+  "DockControls",
+  "DockFixup",
+  "dockfixup",
+
+  # Input / IME
+  "textinputswitcher",
+  "TextInputSwitcher",
+  "textinputmenuagent",
+  "TextInputMenuAgent",
+  "inputcontextdaemon",
+  "imklaunchagent",
+  "IMKLaunchAgent",
+
+  # Universal Control (cross-device mouse/keyboard)
+  "universalcontrol",
+  "UniversalControl",
+  "cursoruiviewservice",
+
+  # Accessibility
+  "accessibilityuiserver",
+  "universalaccessauthwarn",
+  "UniversalAccessAuthWarn",
+  "axassetsd",
+  "AXVisualSupportAgent",
+  "axvisualsupportagent",
+
+  # Notifications / focus
+  "usernoted",
+  "UserNotificationCenter",
+  "usernotificationcenter",
+  "donotdisturbd",
+  "focusconfigd",
+  "ncprefs",
+
+  # Widgets / Live Activities
+  "widgetextensionhost",
+  "WidgetExtensionHost",
+  "liveactivitiesd",
+  "LiveActivitiesd",
+  "ShortcutsViewService",
+  "shortcutsviewservice",
+
+  # Screen sharing / remote desktop
+  "screensharingd",
+  "ScreenSharingMenulet",
+  "screensharingmenulet",
+  "ardagent",
+  "ARDAgent",
+
+  # Pasteboard / clipboard
+  "pboard",
+  "pbs",
+
+  # Launch services / file associations
+  "lsd",
+  "sharedfilelistd",
+
+  # Fonts
+  "fontd",
+  "fontworker",
+
+  # Icon / thumbnail services
+  "iconservicesagent",
+  "iconservicesd",
+  "quicklookd",
+  "quicklookuiservice",
+  "QuickLookUIService",
+  "qlmanage",
+
+  # Status bar / menu extras
+  "statuskitagent",
+  "StatusKitAgent",
+  "ssmenuagent",
+  "SystemUIServer",
+  "systeminputeventfilter",
+  "SystemInputEventFilter",
+  "controlcenterd",
+
+  # Continuity / Handoff
+  "rapportd",
+  "continuityuiagent",
+  "ContinuityUIAgent",
+
+  # Activity / user state
+  "useractivityd",
+  "linkd",
+  "transparencyd",
+  "Transparencyd",
+
+  # Crash reporting / diagnostics (desktop-facing)
+  "ReportCrash",
+  "reportcrash",
+  "osanalyticshelper",
+  "diagnostics_agent",
+  "DiagnosticsAgent",
+
+  # Home app
+  "homed",
+  "homeenergyd",
+  "HomeEnergySchedulerService",
+
+  # Spotlight UI
+  "Spotlight",
+  "spotlight",
+
+  # Window manager (macOS Sequoia window tiling)
+  "WindowManager",
+  "windowmanager",
+
+  # UIKit system app host
+  "UIKitSystem",
+  "uikitsystem",
+
+  # Tal agent (text-to-live-activity)
+  "talagentd",
+
+  # Scoped bookmark agent (file access authorisation)
+  "ScopedBookmarkAgent",
+  "scopedbookmarkagent",
+
+  # User notifications XPC service
+  "usernotificationsd",
+
+  # CoreParsec (fast text parsing framework used by Spotlight / Siri)
+  "parsec-fbf",
+
+  # Chrono framework daemon (calendar/time UI)
+  "chronod",
+
+  # Print UI / CUPS frontend
+  "printtool",
+
+  # Press-and-hold input method extension
+  "PAH_Extension",
+  "pah_extension",
+
+  # Apple Spell checker
+  "applespell",
+
+  # System widget extension host processes
+  "ShortcutsWidgetExtension",
+  "shortcutswidgetextension",
+  "NewsTag",
+  "newstag",
+  "NewsToday2",
+  "newstoday2",
+  "HomeEnergyWidgetsExtension",
+  "homeenergywidgetsextension",
+  "HomeWidget",
+  "homewidget",
+  "StocksWidget",
+  "stockswidget",
+  "JournalWidgets",
+  "journalwidgets",
+  "JournalWidgetsSecure",
+  "journalwidgetssecure",
+  "ScreenTimeWidgetExtension",
+  "screentimewidgetextension",
+  "PodcastsWidget",
+  "podcastswidget",
+  "WorldClockWidget",
+  "worldclockwidget",
+  "FindMyWidgetItems",
+  "findmywidgetitems",
+  "FindMyWidgetPeople",
+  "findmywidgetpeople",
+  "BatteriesAvocadoWidgetExtension",
+  "batteriesavocadowidgetextension",
+  "WeatherWidget",
+  "weatherwidget",
+  "WidgetExtensionHost",
+  "widgetextensionhost",
+]

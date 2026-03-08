@@ -1,0 +1,40 @@
+schema_version = 1
+
+# Messages, FaceTime, Contacts, Calendar, Reminders, Mail, and Maps backends.
+[[system_category]]
+id = "sys.macos_communications"
+name = "macOS Communications"
+exe = [
+  # Messages / iMessage / FaceTime
+  "imagent",
+  "imdpersistenceagent",
+  "callservicesd",
+  "avconferenced",
+  "sociallayerd",
+  "messagesactionextension",
+  "messagesblastdoorservice",
+  "communicationtrustd",
+  "identityservicesd",
+  "heard",          # Siri speech / call transcription overlap
+
+  # Contacts
+  "contactsd",
+  "avatarsd",
+  "AddressBookSourceSync",
+  "addressbooksourcesync",
+
+  # Calendar / Reminders
+  "calaccessd",
+  "CalendarAgent",
+  "calendaragent",
+  "remindd",
+  "followupd",
+  "dataaccessd",
+
+  # Mail
+  "maild",
+
+  # Maps / navigation
+  "mapssyncd",
+  "navd",
+]

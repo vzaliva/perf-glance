@@ -1,0 +1,25 @@
+schema_version = 1
+
+# Signal on macOS — main process exe is "Signal" (not "signal-desktop" as on Linux).
+# Helpers are children of Signal main in the process tree; adding the main rule is
+# enough for ancestor-matching to group all helpers under it, but explicit rules
+# make it robust and visible in --dump-groups mode too.
+[[app]]
+id = "app.signal.mac"
+exe = "signal"
+name = "Signal"
+
+[[app]]
+id = "app.signal.mac.helper"
+exe = "signal helper"
+name = "Signal"
+
+[[app]]
+id = "app.signal.mac.renderer"
+exe = "signal helper (renderer)"
+name = "Signal"
+
+[[app]]
+id = "app.signal.mac.plugin"
+exe = "signal helper (plugin)"
+name = "Signal"

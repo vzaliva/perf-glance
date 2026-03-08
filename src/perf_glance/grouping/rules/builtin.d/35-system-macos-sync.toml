@@ -1,0 +1,51 @@
+schema_version = 1
+
+# iCloud, CloudKit, account syncing, Find My, and Apple ID daemons.
+[[system_category]]
+id = "sys.macos_sync"
+name = "macOS Sync"
+exe = [
+  # iCloud / CloudKit core
+  "cloudd",
+  "bird",
+  "cloudpaird",
+  "icloudnotificationagent",
+  "protectedcloudkeysyncing",
+  "cloudtelemetryservice",
+  "postersyncd",
+  "newsd",
+  "cdpd",
+  "cmfsyncagent",
+
+  # Apple ID / accounts
+  "accountsd",
+  "akd",
+  "appleaccountd",
+  "amsaccountsd",
+  "AppSSOAgent",
+  "appssoagent",
+  "trustedpeershelper",
+
+  # Safari / bookmark sync
+  "safaribookmarkssyncagent",
+  "syncdefaultsd",
+
+  # Find My
+  "searchpartyuseragent",
+  "findmydevice-user-agent",
+  "findmylocateagent",
+
+  # Wallet / Passes
+  "passd",
+
+  # File provider (iCloud Drive, file sync extensions)
+  "fileproviderd",
+  "bird",
+
+  # Screen Time / Family Sharing sync
+  "familycircled",
+  "studentd",
+  "screentimeagent",
+  "UsageTrackingAgent",
+  "usagetrackingagent",
+]

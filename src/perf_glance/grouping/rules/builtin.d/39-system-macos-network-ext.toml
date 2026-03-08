@@ -1,0 +1,37 @@
+schema_version = 1
+
+# Additional macOS networking daemons not in the base sys.macos_network rule.
+# Using the same display name so they merge into the existing group.
+[[system_category]]
+id = "sys.macos_network_ext"
+name = "macOS Network"
+exe = [
+  # Network extension / VPN agent
+  "neagent",
+  "networkserviceproxy",
+  "nesessionmanager",
+  "networkextension",
+
+  # WiFi diagnostics / analytics
+  "wifianalyticsd",
+  "wifiagent",
+
+  # Location
+  "CoreLocationAgent",
+  "corelocationagent",
+  "geod",
+  "geoanalyticsd",
+  "intelligentroutingd",
+
+  # Network quality / diagnostics
+  "symptomsd",
+  "nettop",
+
+  # DNS / Bonjour
+  "discoveryd",
+  "mDNSResponderHelper",
+  "mdnsresponderhelper",
+
+  # Sharing (AirDrop, file sharing)
+  "sharingd",
+]

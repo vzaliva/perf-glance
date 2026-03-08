@@ -1,0 +1,50 @@
+schema_version = 1
+
+# nanoclaw — a user Node.js daemon; the builtin sys.macos_services list includes
+# "nanoclaw" as a heuristic, but the app rule in Layer 1 takes priority and gives
+# it its own group instead.
+[[app]]
+id = "app.nanoclaw"
+exe = "nanoclaw"
+name = "nanoclaw"
+
+# Proton Drive — runs as a standalone .app, not under protonvpn-app
+[[app]]
+id = "app.proton_drive"
+exe = "proton drive"
+name = "Proton Drive"
+
+# Apple's macOS container runtime (macOS Sequoia+) — container-apiserver,
+# container-core-images, container-network-vmnet are sibling daemons launched
+# by launchd.  Group them so they don't clutter "other".
+[[app]]
+id = "app.mac_container_apiserver"
+exe = "container-apiserver"
+name = "macOS Containers"
+
+[[app]]
+id = "app.mac_container_core_images"
+exe = "container-core-images"
+name = "macOS Containers"
+
+[[app]]
+id = "app.mac_container_network_vmnet"
+exe = "container-network-vmnet"
+name = "macOS Containers"
+
+[[app]]
+id = "app.mac_container_runtime_linux"
+exe = "container-runtime-linux"
+name = "macOS Containers"
+
+# Grammarly Desktop helpers — launched as launchd agents so ancestor matching
+# doesn't automatically attach them to the main Grammarly Desktop process.
+[[app]]
+id = "app.grammarly.helper"
+exe = "grammarly desktop helper"
+name = "Grammarly"
+
+[[app]]
+id = "app.grammarly.updater"
+exe = "grammarly desktop update service"
+name = "Grammarly"

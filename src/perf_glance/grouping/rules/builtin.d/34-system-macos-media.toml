@@ -1,0 +1,54 @@
+schema_version = 1
+
+# Photos, Music, AirPlay, audio routing, and media framework daemons.
+[[system_category]]
+id = "sys.macos_media"
+name = "macOS Media"
+exe = [
+  # Photos library and analysis
+  "photolibraryd",
+  "photoanalysisd",
+  "mediaanalysisiosd",
+  "mediaanalysisd",
+
+  # Media playback / remote control
+  "mediaremoted",
+  "mediaremoteagent",
+  "replayd",
+  "vtdecoderxpcservice",
+  "mediaserverd",
+
+  # AirPlay
+  "AirPlayXPCHelper",
+  "airplayxpchelper",
+  "AirPlayUIAgent",
+  "airplayuiagent",
+
+  # Audio
+  "coreaudiod",
+  "audiomxd",
+  "audioaccessoryd",
+  "audiocomponentregistrar",
+  "AUHostingService",
+  "auhostingservice",
+
+  # Music / Apple Media Products
+  "AMPLibraryAgent",
+  "amplibraryagent",
+  "AMPDeviceDiscoveryAgent",
+  "ampdevicediscoveryagent",
+  "AMPArtworkAgent",
+  "ampartworkagent",
+  "amsondevicestoraged",
+  "itunescloudd",
+  "iTunesHelper",
+  "ituneshelper",
+
+  # Video conferencing capture
+  "avconferenced",
+  "continuitycaptureagent",
+
+  # FaceTime app process
+  "FaceTime",
+  "facetime",
+]

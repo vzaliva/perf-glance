@@ -1,0 +1,56 @@
+schema_version = 1
+
+# Additional macOS security and privacy daemons not in the base sys.macos_security rule.
+# Using the same display name so they merge into the existing group in the UI.
+[[system_category]]
+id = "sys.macos_security_ext"
+name = "macOS Security"
+exe = [
+  # Transparency, Consent, Control (TCC) — privacy permission daemon
+  "tccd",
+
+  # Security initialisation (sandbox, entitlement bootstrap)
+  "secinitd",
+
+  # Full-disk encryption
+  "filevaultd",
+
+  # Keychain helpers
+  "Keychain Circle Notification",
+  "keychain circle notification",
+  "ScopedBookmarkAgent",
+  "scopedbookmarkagent",
+
+  # Screen Time / parental controls enforcement
+  "ManagedSettingsAgent",
+  "managedsettingsagent",
+  "familycontrolsd",
+
+  # Privacy / ad attribution
+  "dprivacyd",
+  "adprivacyd",
+  "privatecloudcomputed",
+
+  # Code signing / policy
+  "swcd",
+  "fairplayd",
+  "xartd",
+
+  # Smart card / CryptoTokenKit
+  "ctkd",
+  "ctkahp",
+
+  # Auth broker / biometrics
+  "askpermissiond",
+  "authenticationservicesagent",
+  "LocalAuthenticationRemoteService",
+  "localauthenticationremoteservice",
+
+  # Password / credential breach monitoring
+  "passwordbreachagent",
+
+  # Feature access gating
+  "featureaccessagent",
+  "transparencyd",
+  "frauddefensed",
+]

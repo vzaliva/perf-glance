@@ -1,0 +1,24 @@
+schema_version = 1
+
+# App Store, StoreKit, in-app purchases, and Apple subscription daemons.
+[[system_category]]
+id = "sys.macos_appstore"
+name = "macOS App Store"
+exe = [
+  "appstoreagent",
+  "storedownloadd",
+  "storeinappd",
+  "storeassetd",
+  "storekitagent",
+  "commerce",
+  "promotedcontentd",
+  "amsengagementd",
+  "jetpackassetd",
+  "setstoreupdateservice",
+  "triald",
+  "trialarchivingservice",
+  "financed",
+  "SoftwareUpdateNotificationManager",
+  "softwareupdatenotificationmanager",
+  "assetcachelocatorservice",
+]
