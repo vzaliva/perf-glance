@@ -91,6 +91,8 @@ exe = [
   "corespotlightd",
   "mdworker_shared",
   "mediaanalysisd",
+  "managedcorespotlightd",
+  "mdbulkimport",
 ]
 
 # Catch-all for com.apple.* helper processes not covered above
