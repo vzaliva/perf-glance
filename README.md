@@ -29,7 +29,18 @@ Additional screenshots: [linux](docs/linux_screenshot.png), [mac](docs/mac_scree
 
 ## Quick Start
 
-**1. uvx** (recommended; requires [uv](https://docs.astral.sh/uv/)):
+**Rust version** (from source):
+
+```sh
+cargo build --release
+./target/release/perf-glance
+```
+
+Or run directly: `cargo run --release`
+
+**Python version** (requires [uv](https://docs.astral.sh/uv/)):
+
+**1. uvx** (recommended):
 
 ```sh
 uvx --from 'git+https://github.com/vzaliva/perf-glance' perf-glance
