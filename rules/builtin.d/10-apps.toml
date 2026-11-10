@@ -69,6 +69,13 @@ family = "agent"
 no_tool_reclaim = true
 
 [[app]]
+id = "app.pi"
+exe = "pi"
+name = "pi"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
 id = "app.cursor_agent"
 exe = "cursor-agent"
 name = "Cursor Agent"

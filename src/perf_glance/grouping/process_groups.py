@@ -232,7 +232,9 @@ def _effective_exe(
 
     cmdline = getattr(proc, "cmdline", None) or ""
     parts = cmdline.split() if cmdline else []
-    if len(parts) < 2:
+    # Single-element argv is still resolved: runtimes whose process title was
+    # rewritten (e.g. node CLIs) only expose the title as argv[0].
+    if not parts:
         return exe_lower
 
     argv0_base = _normalize_exe(parts[0])

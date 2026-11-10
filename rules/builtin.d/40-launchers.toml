@@ -149,6 +149,11 @@ exe = "node"
 [[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
+# Node CLIs that rewrite process.title (e.g. pi) leave argv = ["<title>"];
+# fall back to argv[0] so they are identified by their title.
+[[launcher.step]]
+kind = "argv_at"
+index = 0
 [launcher.transform]
 generic_entrypoint_fallback = true
 
