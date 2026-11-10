@@ -695,6 +695,50 @@ def test_effective_exe_runtime_no_args() -> None:
     assert _effective_exe(proc, {"python3"}, rules.launchers_by_exe) == "python3"
 
 
+def test_effective_exe_node_retitled_single_argv() -> None:
+    """Node CLI that rewrote process.title (argv == [title]) resolves to the title."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(1, 0, "pi", "node", 0, 0, "pi")
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "pi"
+
+
+def test_effective_exe_node_bare_stays_node() -> None:
+    """Bare `node` (REPL, argv == ["node"]) keeps the runtime name."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(1, 0, "node", "node", 0, 0, "node")
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) == "node"
+
+
+def test_effective_exe_node_script_still_wins() -> None:
+    """argv[0] fallback must not shadow a real script argument."""
+    from perf_glance.grouping.process_groups import _effective_exe
+    from perf_glance.grouping.rules_loader import load_grouping_rules_cached
+
+    proc = MockProcess(1, 0, "node", "node", 0, 0, "node /opt/foo/server.js")
+    rules = load_grouping_rules_cached()
+    assert _effective_exe(proc, set(), rules.launchers_by_exe) != "node"
+
+
+def test_pi_grouped_as_app_with_children() -> None:
+    """Retitled node `pi` forms its own app group and claims its children."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    procs = [
+        MockProcess(100, 1, "pi", "node", 1.0, 100_000_000, "pi"),
+        MockProcess(101, 100, "rg", "rg", 1.0, 5_000_000, "rg foo"),
+    ]
+    groups = group_processes(procs, RAM, _minimal_config())
+    pi = [g for g in groups if g.name == "pi"]
+    assert pi, [g.name for g in groups]
+    assert pi[0].proc_count == 2
+
+
 def test_effective_exe_shell_dash_c_stays_shell_name() -> None:
     """Shell -c payloads are snippets, not executable identities."""
     from perf_glance.grouping.process_groups import _effective_exe
