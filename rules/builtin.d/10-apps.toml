@@ -54,19 +54,24 @@ id = "app.claude"
 exe = "claude"
 name = "Claude"
 family = "agent"
-no_tool_reclaim = true
 
 [[app]]
 id = "app.claude_code"
 exe = "claude-code"
 name = "Claude"
 family = "agent"
-no_tool_reclaim = true
 
 [[app]]
 id = "app.codex"
 exe = "codex"
 name = "Codex"
+family = "agent"
+no_tool_reclaim = true
+
+[[app]]
+id = "app.pi"
+exe = "pi"
+name = "pi"
 family = "agent"
 no_tool_reclaim = true
 
@@ -205,3 +210,60 @@ name = "Konsole"
 id = "app.xterm"
 exe = "xterm"
 name = "xterm"
+
+[[app]]
+id = "app.ollama"
+exe = "ollama"
+name = "Ollama"
+
+# Crash reporters double-fork and get reparented to init, so the tree walk
+# cannot attach them to their app. Attribute them by install/config path
+# found in the command line (case-insensitive substring). Order matters:
+# first match wins, so "/cursor/" must precede "/code/".
+[[app]]
+id = "app.cursor.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/cursor/"
+name = "Cursor"
+
+[[app]]
+id = "app.code.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/code/"
+name = "VS Code"
+
+[[app]]
+id = "app.slack.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/slack/"
+name = "Slack"
+
+[[app]]
+id = "app.discord.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/discord/"
+name = "Discord"
+
+[[app]]
+id = "app.mattermost.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/mattermost/"
+name = "Mattermost"
+
+[[app]]
+id = "app.zulip.crashpad"
+exe = "chrome_crashpad_handler"
+cmdline = "/zulip/"
+name = "Zulip"
+
+[[app]]
+id = "app.firefox.crashhelper"
+exe = "crashhelper"
+cmdline = "/firefox/"
+name = "Firefox"
+
+[[app]]
+id = "app.thunderbird.crashhelper"
+exe = "crashhelper"
+cmdline = "/thunderbird/"
+name = "Thunderbird"

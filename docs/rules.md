@@ -96,6 +96,7 @@ Optional fields:
 2. `family`: `""`, `electron`, `chromium`, `gecko`, `agent`
 3. `cmdline`: case-insensitive substring filter
 4. `no_tool_reclaim`: if `true`, Layer 2 tools will not reclaim this app's subtree
+   (independent of `family`; `agent` does not imply it)
 
 ```toml
 [[app]]
@@ -120,6 +121,10 @@ Optional fields:
 
 1. `enabled` (default `true`)
 2. `category` (metadata only: `compiler`, `build`, `lsp`, `runtime`, ...)
+3. `cmdline`: case-insensitive substring filter. Rules with `cmdline` take
+   precedence over exe-only rules for the same exe, regardless of file order.
+4. `build` (default `true`): when `false` (long-running servers), a multi-process
+   group keeps its plain `name` instead of `"<name> build (N procs)"`.
 
 ```toml
 [[tool]]
@@ -127,6 +132,15 @@ id = "build.lake"
 exe = "lake"
 name = "Lake"
 category = "build"
+
+# Split the Lean language server from Lean builds
+[[tool]]
+id = "tool.lean_server"
+exe = "lean"
+cmdline = "--server"
+name = "Lean server"
+category = "lsp"
+build = false
 ```
 
 ### `[[system_category]]`

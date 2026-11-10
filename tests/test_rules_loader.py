@@ -115,3 +115,33 @@ generic_parents = ["bash"]
 
     with pytest.raises(ValueError, match="legacy"):
         load_config(cfg)
+
+
+def test_tool_cmdline_and_build_keys(tmp_path) -> None:
+    builtin = tmp_path / "builtin"
+    _write(
+        builtin / "10-base.toml",
+        """schema_version = 1
+[[tool]]
+id = "tool.srv"
+exe = "lean"
+cmdline = "--server"
+name = "Lean server"
+build = false
+
+[[tool]]
+id = "tool.plain"
+exe = "lean"
+name = "Lean"
+""",
+    )
+    rules = load_grouping_rules(
+        builtin_rules_dir=builtin,
+        system_rules_dir=tmp_path / "system",
+        user_rules_dir=tmp_path / "user",
+    )
+    by_id = {t.name: t for t in rules.tools}
+    assert by_id["Lean server"].cmdline == "--server"
+    assert by_id["Lean server"].build is False
+    assert by_id["Lean"].cmdline == ""
+    assert by_id["Lean"].build is True

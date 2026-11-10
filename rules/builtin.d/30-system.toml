@@ -58,9 +58,12 @@ name = "Network"
 exe = [
   "NetworkManager",
   "networkmanager",
+  "nm-dispatcher",
   "wpa_supplicant",
   "systemd-resolved",
   "systemd-timesyncd",
+  "ntpd",
+  "chronyd",
   "openvpn",
   "proton.vpn.daemon",
   "wireguard",
@@ -84,13 +87,14 @@ exe = [
 [[system_category]]
 id = "sys.printing"
 name = "Printing"
-exe = ["cupsd", "cups-browsed", "cups-lpd"]
+# "dbus" is CUPS's D-Bus notifier (/usr/lib/cups/notifier/dbus), a cupsd child.
+exe = ["cupsd", "cups-browsed", "cups-lpd", "dbus"]
 
 [[system_category]]
 id = "sys.file_services"
 name = "File Services"
-exe = ["udisksd", "tracker-miner", "tracker-extract", "baloo", "systemd-udevd", "fusermount3", "boltd"]
-exe_prefix = ["gvfsd", "gvfs-"]
+exe = ["udisksd", "systemd-udevd", "fusermount3", "boltd"]
+exe_prefix = ["gvfsd", "gvfs-", "tracker-miner", "tracker-extract", "tracker-xdg-portal", "localsearch", "baloo"]
 
 [[system_category]]
 id = "sys.security"
@@ -103,8 +107,6 @@ exe = [
   "ssh-agent",
   "pam",
   "(sd-pam)",
-  "at-spi-bus-launcher",
-  "at-spi2-registryd",
   "xdg-permission-store",
   "xdg-document-portal",
 ]
@@ -114,6 +116,7 @@ id = "sys.session"
 name = "Session / Desktop"
 exe = [
   "systemd",
+  "init",  # PID 1 (/sbin/init -> systemd)
   "dbus-daemon",
   "@dbus-daemon",
   "dconf-service",
@@ -121,12 +124,19 @@ exe = [
   "xdg-desktop-portal-gtk",
   "xdg-desktop-portal-gnome",
   "snapd-desktop-integration",
+  "user-session-helper",
+  "at-spi-bus-launcher",
+  "at-spi2-registryd",
   "snap-handle-link",
   "snap",
   "goa-daemon",
   "goa-identity-service",
   "xss-lock",
   "xautolock",
+  "i3lock",
+  "swaylock",
+  "xscreensaver",
+  "light-locker",
   "flameshot",
   "nm-applet",
   "colord",
@@ -134,6 +144,8 @@ exe = [
   "systemd-logind",
   "accounts-daemon",
   "power-profiles-daemon",
+  "tlp-pd",
+  "thermald",
   "switcheroo-control",
   "upowerd",
   "cron",
@@ -162,3 +174,29 @@ exe = [
   "conmon",
   "systemd-machined",
 ]
+
+[[system_category]]
+id = "sys.software_updates"
+name = "Software Updates"
+exe = [
+  "snapd",
+  "fwupd",
+  "packagekitd",
+  "unattended-upgrade-shutdown",
+  "unattended-upgrade",
+  "unattended-upgrades",
+  "update-notifier",
+  "aptd",
+  "apt",
+  "apt-get",
+  "dpkg",
+]
+
+# Stopgap: bare/idle shells and `sh -c` wrappers are generic parents, so
+# Layer 1 never attributes them to an app and Layer 4 used to show them as
+# separate "bash"/"dash"/"fish" rows. Collect them in one row instead.
+# Shell scripts (`bash ./foo.sh`) still resolve to the script name.
+[[system_category]]
+id = "sys.shells"
+name = "Shells"
+exe = ["bash", "dash", "sh", "zsh", "fish", "ksh", "tcsh", "csh"]

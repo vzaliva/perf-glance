@@ -232,7 +232,9 @@ def _effective_exe(
 
     cmdline = getattr(proc, "cmdline", None) or ""
     parts = cmdline.split() if cmdline else []
-    if len(parts) < 2:
+    # Single-element argv is still resolved: runtimes whose process title was
+    # rewritten (e.g. node CLIs) only expose the title as argv[0].
+    if not parts:
         return exe_lower
 
     argv0_base = _normalize_exe(parts[0])
@@ -310,14 +312,31 @@ def _match_app(
     return None
 
 
-def _match_tool(effective: str, tool_patterns: list[ToolPattern]) -> tuple[str, str] | None:
-    """Match process against tool patterns. Returns (display_name, category) or None."""
+def _match_tool(
+    effective: str,
+    tool_patterns: list[ToolPattern],
+    cmdline: str = "",
+) -> tuple[str, str, bool] | None:
+    """Match process against tool patterns. Returns (display_name, category, build) or None.
+
+    Patterns with a ``cmdline`` filter (case-insensitive substring) take
+    precedence over exe-only patterns, regardless of rule order, so e.g.
+    ``lean --server`` can be split from plain ``lean`` builds.
+    """
     effective_lower = effective.lower()
+    cmdline_lower = (cmdline or "").lower()
+    fallback: tuple[str, str, bool] | None = None
     for pattern in tool_patterns:
-        exe = pattern.exe.lower()
-        if effective_lower == exe:
-            return (pattern.name, pattern.category or "compiler")
-    return None
+        if effective_lower != pattern.exe.lower():
+            continue
+        result = (pattern.name, pattern.category or "compiler", bool(getattr(pattern, "build", True)))
+        pat_cmdline = getattr(pattern, "cmdline", "") or ""
+        if pat_cmdline:
+            if pat_cmdline.lower() in cmdline_lower:
+                return result
+        elif fallback is None:
+            fallback = result
+    return fallback
 
 
 def _match_system_category(
@@ -518,12 +537,14 @@ def group_processes(
     def is_assigned(pid: int) -> bool:
         return pid in pid_to_assignment
 
-    # Pids assigned to no-tool-reclaim apps (agent apps, etc.)
+    # Pids assigned to apps with no_tool_reclaim = true (explicit per rule;
+    # family alone does not imply it, so e.g. Lean builds started by Claude
+    # can still be reclaimed into their tool group).
     no_tool_reclaim_pids: set[int] = set()
 
     def _assign_app(pid: int, app_name: str, uid: int, pattern: AppPattern | None) -> None:
         assign(pid, "app", f"{app_name}:{uid}")
-        if pattern and (pattern.family == "agent" or pattern.no_tool_reclaim):
+        if pattern and pattern.no_tool_reclaim:
             no_tool_reclaim_pids.add(pid)
 
     # Layer 1: Application recognition
@@ -596,16 +617,18 @@ def group_processes(
                 continue
 
     # Layer 2: Tool grouping (reclaims from Layer 1, but not no-tool-reclaim app children)
+    pid_tool_is_build: dict[int, bool] = {}
     for proc in processes:
         pid = proc.pid
         if pid in no_tool_reclaim_pids:
             continue
         exe = effective_exe_map[pid]
         uid = proc.uid
-        tool_match = _match_tool(exe, tool_patterns)
+        tool_match = _match_tool(exe, tool_patterns, proc.cmdline or "")
         if tool_match:
-            tool_name, _ = tool_match
+            tool_name, _, tool_is_build = tool_match
             assign(pid, "tool", f"{tool_name}:{uid}")
+            pid_tool_is_build[pid] = tool_is_build
 
     # Layer 3: System categories.
     # Split "current user" from system accounts so e.g. lord's session tools
@@ -666,7 +689,9 @@ def group_processes(
         elif layer == "tool":
             parts = rest.rsplit(":", 1)
             name = parts[0]
-            if len(procs) > 1:
+            # Tool rules with build = false (servers) keep their plain name.
+            is_build = any(pid_tool_is_build.get(p.pid, True) for p in procs)
+            if len(procs) > 1 and is_build:
                 name = f"{name} build ({len(procs)} procs)"
         else:
             if rest.startswith("exe:"):

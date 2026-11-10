@@ -149,12 +149,30 @@ exe = "node"
 [[launcher.step]]
 kind = "first_non_flag"
 start_index = 1
+# Node CLIs that rewrite process.title (e.g. pi) leave argv = ["<title>"];
+# fall back to argv[0] so they are identified by their title.
+[[launcher.step]]
+kind = "argv_at"
+index = 0
 [launcher.transform]
 generic_entrypoint_fallback = true
 
 [[launcher]]
 id = "launcher.cursor_agent"
 exe = "cursor-agent"
+[[launcher.step]]
+kind = "argv_at"
+index = 0
+[launcher.transform]
+basename = true
+lowercase = true
+
+# Claude Code is a multi-call binary: it re-execs itself as its bundled grep
+# (argv[0] = "ugrep"), and the exe resolves to "claude" (versions/<x.y.z> ->
+# grandparent dir). Use argv[0] so those helpers aren't counted as sessions.
+[[launcher]]
+id = "launcher.claude"
+exe = "claude"
 [[launcher.step]]
 kind = "argv_at"
 index = 0

@@ -162,7 +162,7 @@ def _parse_app(path: Path, entry: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _parse_tool(path: Path, entry: dict[str, Any]) -> dict[str, Any] | None:
-    _warn_unknown_keys(path, "tool", entry, {"id", "enabled", "exe", "name", "category"})
+    _warn_unknown_keys(path, "tool", entry, {"id", "enabled", "exe", "name", "category", "cmdline", "build"})
     rid = str(entry.get("id", "")).strip()
     exe = _norm_key(str(entry.get("exe", "")))
     name = str(entry.get("name", "")).strip()
@@ -175,6 +175,8 @@ def _parse_tool(path: Path, entry: dict[str, Any]) -> dict[str, Any] | None:
         "exe": exe,
         "name": name,
         "category": str(entry.get("category", "")).strip(),
+        "cmdline": str(entry.get("cmdline", "")).strip(),
+        "build": bool(entry.get("build", True)),
     }
 
 
@@ -456,6 +458,8 @@ def _compile(state: _RawState) -> CompiledRules:
                 exe=entry["exe"],
                 name=entry["name"],
                 category=entry["category"],
+                cmdline=entry["cmdline"],
+                build=entry["build"],
             )
         )
 

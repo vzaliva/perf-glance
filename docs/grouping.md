@@ -89,7 +89,8 @@ child detection:
   exe in path → grouped under the app
 - **gecko**: children with `-contentproc` in cmdline, same exe
 - **agent**: TUI AI agents (Claude, Codex, Cursor Agent) — their subprocesses stay with
-  the agent; Layer 2 does **not** reclaim them
+  the agent and sub-groups are keyed by effective exe. Whether Layer 2 may reclaim
+  build tools from the agent is controlled separately by `no_tool_reclaim`
 - unset: standard tree-walk only
 
 Groups are keyed by `(name, uid)` — same app run by different users → separate
@@ -98,9 +99,10 @@ groups.
 ### Layer 2: Build / Tool Grouping
 
 Exe match against built-in and user-configured tool patterns. Tools **reclaim**
-from Layer 1 in general (for example under non-agent apps such as Firefox).
-Exception: processes under AI host apps (Claude, Codex, Cursor, Cursor Agent)
-are not reclaimed.
+from Layer 1 in general (for example under Firefox or Claude, so a Lean build
+started by Claude shows up as its own "Lean build" group). Exception: apps
+whose rule sets `no_tool_reclaim = true` (built-in: Codex, Cursor, Cursor Agent)
+keep their tool processes.
 
 ### Layer 3: System Categories
 

@@ -39,6 +39,8 @@ def _serialize_grouping_config(cfg: object) -> dict:
             "exe": str(getattr(p, "exe", "")),
             "name": str(getattr(p, "name", "")),
             "category": str(getattr(p, "category", "")),
+            "cmdline": str(getattr(p, "cmdline", "")),
+            "build": bool(getattr(p, "build", True)),
         })
 
     system_categories = []

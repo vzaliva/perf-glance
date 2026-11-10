@@ -39,6 +39,14 @@ def run() -> None:
         prog="perf-glance",
         description="Terminal-based system utilization monitor for Linux",
     )
+    from perf_glance import version_string
+
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="version",
+        version=f"%(prog)s {version_string()}",
+    )
     parser.add_argument(
         "-i",
         "--interval",
