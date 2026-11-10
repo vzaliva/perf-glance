@@ -52,6 +52,8 @@ def _build_grouping_config(raw: dict) -> SimpleNamespace:
             exe=str(item.get("exe", "")),
             name=str(item.get("name", "")),
             category=str(item.get("category", "")),
+            cmdline=str(item.get("cmdline", "")),
+            build=bool(item.get("build", True)),
         )
         for item in raw.get("tools", [])
     ]

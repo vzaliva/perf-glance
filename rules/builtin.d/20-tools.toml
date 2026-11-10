@@ -18,6 +18,33 @@ exe = "leanc"
 name = "Lean"
 category = "compiler"
 
+# Lean language server (`lake serve` -> `lean --server` -> `lean --worker`),
+# e.g. from an editor or lean-lsp-mcp. Rules with `cmdline` win over the
+# exe-only rules above; `build = false` keeps the plain "Lean server" name.
+[[tool]]
+id = "tool.lake_serve"
+exe = "lake"
+cmdline = "lake serve"
+name = "Lean server"
+category = "lsp"
+build = false
+
+[[tool]]
+id = "tool.lean_server"
+exe = "lean"
+cmdline = "--server"
+name = "Lean server"
+category = "lsp"
+build = false
+
+[[tool]]
+id = "tool.lean_worker"
+exe = "lean"
+cmdline = "--worker"
+name = "Lean server"
+category = "lsp"
+build = false
+
 [[tool]]
 id = "tool.coqc"
 exe = "coqc"
@@ -174,11 +201,21 @@ exe = "cargo"
 name = "Cargo"
 category = "build"
 
+# Rust language server and its proc-macro expander (spawned by rust-analyzer).
+# Its `cargo check` runs stay in "Cargo".
 [[tool]]
 id = "tool.rust_analyzer"
 exe = "rust-analyzer"
-name = "Rust"
+name = "Rust server"
 category = "lsp"
+build = false
+
+[[tool]]
+id = "tool.rust_analyzer_proc_macro_srv"
+exe = "rust-analyzer-proc-macro-srv"
+name = "Rust server"
+category = "lsp"
+build = false
 
 [[tool]]
 id = "tool.go"
@@ -186,11 +223,14 @@ exe = "go"
 name = "Go"
 category = "compiler"
 
+# Go language server (also covers the `gopls -remote=auto` forwarder and the
+# shared `gopls serve` daemon). Its `go list`/`go build` runs stay in "Go".
 [[tool]]
 id = "tool.gopls"
 exe = "gopls"
-name = "Go"
+name = "Go server"
 category = "lsp"
+build = false
 
 [[tool]]
 id = "tool.uv"

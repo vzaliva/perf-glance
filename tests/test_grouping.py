@@ -179,8 +179,8 @@ def test_tool_reclaim_from_app() -> None:
     assert any("ake" in g.name for g in groups)
 
 
-def test_tool_not_reclaimed_from_agent_app() -> None:
-    """Layer 2 should not reclaim tools from agent-family apps (Claude/Codex)."""
+def test_tool_reclaimed_from_claude() -> None:
+    """Builds started by Claude go to their tool groups (Claude has no no_tool_reclaim)."""
     from perf_glance.grouping.process_groups import group_processes
 
     processes = [
@@ -195,8 +195,31 @@ def test_tool_not_reclaimed_from_agent_app() -> None:
     claude = [g for g in groups if g.category == "app" and g.name.lower() == "claude"]
     assert len(claude) == 1
     claude_exes = {(p.exe or "").lower() for p in (claude[0].processes or [])}
-    assert "lean" in claude_exes
-    assert "lake" in claude_exes
+    assert "lean" not in claude_exes
+    assert "lake" not in claude_exes
+
+    tool_exes = {(p.exe or "").lower() for g in groups if g.category == "tool" for p in (g.processes or [])}
+    assert tool_exes == {"lean", "lake"}
+
+
+def test_tool_not_reclaimed_from_no_reclaim_agent() -> None:
+    """Layer 2 should not reclaim tools from apps with no_tool_reclaim = true (Codex)."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(100, 1, "codex", "codex", 1.0, 100_000_000, "codex"),
+        MockProcess(101, 100, "bash", "bash", 0.1, 10_000_000, "bash"),
+        MockProcess(102, 101, "lean", "lean", 50.0, 200_000_000, "lean Foo.lean"),
+        MockProcess(103, 101, "lake", "lake", 20.0, 80_000_000, "lake build"),
+    ]
+    config = _minimal_config()
+    groups = group_processes(processes, RAM, config, None)
+
+    codex = [g for g in groups if g.category == "app" and g.name.lower() == "codex"]
+    assert len(codex) == 1
+    codex_exes = {(p.exe or "").lower() for p in (codex[0].processes or [])}
+    assert "lean" in codex_exes
+    assert "lake" in codex_exes
 
     tool_groups = [g for g in groups if g.category == "tool"]
     assert len(tool_groups) == 0
@@ -709,3 +732,59 @@ def test_effective_exe_cursor_agent_versioned_index_js() -> None:
     )
     rules = load_grouping_rules_cached()
     assert _effective_exe(proc, set(), rules.launchers_by_exe) == "cursor-agent"
+
+
+def test_match_tool_cmdline_filter_wins_over_exe_only() -> None:
+    """cmdline-filtered tool rules take precedence regardless of rule order."""
+    from perf_glance.grouping.patterns import ToolPattern
+    from perf_glance.grouping.process_groups import _match_tool
+
+    tools = [
+        ToolPattern(exe="lean", name="Lean", category="compiler"),
+        ToolPattern(exe="lean", name="Lean server", category="lsp", cmdline="--server", build=False),
+    ]
+    assert _match_tool("lean", tools, "lean --server -Dx=0") == ("Lean server", "lsp", False)
+    assert _match_tool("lean", tools, "lean Foo.lean") == ("Lean", "compiler", True)
+    assert _match_tool("lake", tools, "lake --server") is None
+
+
+def test_lean_server_separate_from_lean_build() -> None:
+    """Builtin rules: Lean language server gets its own unsuffixed group; builds stay 'build'."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(100, 1, "claude", "claude", 1.0, 100_000_000, "claude"),
+        MockProcess(101, 100, "lake", "lake", 0.0, 50_000_000, "/x/bin/lake serve -- -Dserver.reportDelayMs=0"),
+        MockProcess(102, 101, "lean", "lean", 0.0, 900_000_000, "/x/bin/lean --server -Dserver.reportDelayMs=0"),
+        MockProcess(103, 102, "lean", "lean", 0.0, 800_000_000, "/x/bin/lean --worker file:///a.lean"),
+        MockProcess(104, 100, "bash", "bash", 0.0, 1_000_000, "bash"),
+        MockProcess(105, 104, "lean", "lean", 50.0, 200_000_000, "lean A.lean"),
+        MockProcess(106, 104, "lean", "lean", 40.0, 200_000_000, "lean B.lean"),
+    ]
+    groups = group_processes(processes, RAM, _minimal_config(), None)
+    names = {g.name: g for g in groups if g.category == "tool"}
+    assert "Lean server" in names
+    assert names["Lean server"].proc_count == 3
+    assert "Lean build (2 procs)" in names
+
+
+def test_rust_and_go_servers_separate_from_builds() -> None:
+    """Builtin rules: rust-analyzer/gopls get '<Lang> server' rows, distinct from compiler builds."""
+    from perf_glance.grouping.process_groups import group_processes
+
+    processes = [
+        MockProcess(200, 1, "rust-analyzer", "rust-analyzer", 5.0, 900_000_000, "rust-analyzer"),
+        MockProcess(201, 200, "rust-analyzer-proc-macro-srv", "rust-analyzer-proc-macro-srv",
+                    0.0, 50_000_000, "rust-analyzer-proc-macro-srv"),
+        MockProcess(202, 1, "rustc", "rustc", 50.0, 300_000_000, "rustc --crate-name a"),
+        MockProcess(203, 1, "rustc", "rustc", 40.0, 300_000_000, "rustc --crate-name b"),
+        MockProcess(300, 1, "gopls", "gopls", 1.0, 400_000_000, "gopls -remote=auto"),
+        MockProcess(301, 1, "gopls", "gopls", 1.0, 400_000_000, "gopls serve -listen=unix;/tmp/gopls"),
+        MockProcess(302, 1, "go", "go", 30.0, 100_000_000, "go build ./..."),
+    ]
+    groups = group_processes(processes, RAM, _minimal_config(), None)
+    names = {g.name: g.proc_count for g in groups if g.category == "tool"}
+    assert names.get("Rust server") == 2
+    assert names.get("Rust build (2 procs)") == 2
+    assert names.get("Go server") == 2
+    assert names.get("Go") == 1

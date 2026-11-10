@@ -23,4 +23,6 @@ class ToolPattern:
     exe: str
     name: str
     category: str = ""
+    cmdline: str = ""
+    build: bool = True  # False for long-running servers: no "build (N procs)" label
 

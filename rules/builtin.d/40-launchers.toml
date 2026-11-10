@@ -162,6 +162,19 @@ index = 0
 basename = true
 lowercase = true
 
+# Claude Code is a multi-call binary: it re-execs itself as its bundled grep
+# (argv[0] = "ugrep"), and the exe resolves to "claude" (versions/<x.y.z> ->
+# grandparent dir). Use argv[0] so those helpers aren't counted as sessions.
+[[launcher]]
+id = "launcher.claude"
+exe = "claude"
+[[launcher.step]]
+kind = "argv_at"
+index = 0
+[launcher.transform]
+basename = true
+lowercase = true
+
 [[launcher]]
 id = "launcher.ruby"
 exe = "ruby"
